@@ -1,5 +1,7 @@
-use apis::user_handlers::get_user;
-use axum::routing::get;
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use dotenv::dotenv;
 use repositories::user_repository::UserRepository;
 use services::user_service::UserService;
@@ -8,6 +10,7 @@ use std::env;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use utoipa::OpenApi;
+use utoipa_axum::{router::OpenApiRouter, routes};
 use utoipa_scalar::{Scalar, Servable};
 // mod cli;
 mod apis;
@@ -15,12 +18,8 @@ mod models;
 mod repositories;
 mod services;
 
-use utoipa_axum::router::OpenApiRouter;
 #[derive(OpenApi)]
 #[openapi(
-    paths(
-        apis::user_handlers::get_user,
-    ),
     components(schemas(models::users::UserResponse)),
     tags(
         (name = "users", description = "User management API")
@@ -42,17 +41,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("Running in PROD environment");
     }
-
     // sqlx::migrate!().run(&db).await?;
     println!("Connected to the database successfully!");
     let db = Arc::new(db);
     let user_repository = UserRepository::new(db.clone());
     let user_service = UserService::new(Arc::new(user_repository));
-    let (router, openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .route("/users/:id", get(get_user))
+    let api_doc = ApiDoc::openapi();
+    let user_router: OpenApiRouter<UserService> = OpenApiRouter::new()
+        .routes(routes!(apis::user_handlers::get_user))
+        .routes(routes!(apis::user_handlers::follow_user))
+        .routes(routes!(apis::user_handlers::unfollow_user));
+
+    let (router, user_openapi) = OpenApiRouter::with_openapi(api_doc)
+        .nest("/users", user_router)
         .split_for_parts();
     let app = router
-        .merge(Scalar::with_url("/scalar", openapi))
+        .merge(Scalar::with_url("/scalar", user_openapi))
         .with_state(user_service);
 
     let mut pg_listener = PgListener::connect_with(&db).await?;

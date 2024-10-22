@@ -10,8 +10,8 @@ pub struct User {
     pub id: Uuid,
     pub username: String,
     pub telegram_id: Option<String>,
-    pub created_at: DateTime<FixedOffset>,
-    pub updated_at: DateTime<FixedOffset>,
+    pub created_at: Option<DateTime<FixedOffset>>,
+    pub updated_at: Option<DateTime<FixedOffset>>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
