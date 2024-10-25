@@ -10,6 +10,9 @@ COPY Cargo.toml Cargo.lock ./
 # Copy the source code
 COPY src ./src
 
+# Copy the sqlx query files to the working directory
+COPY .sqlx ./.sqlx
+
 COPY migrations ./migrations
 
 RUN apt-get update && apt-get install -y libssl-dev pkg-config

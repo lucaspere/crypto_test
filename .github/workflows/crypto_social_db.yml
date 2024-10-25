@@ -1,0 +1,45 @@
+name: Crypto Social DB CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/crypto_social_db/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/crypto_social_db/**'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose --manifest-path crates/crypto_social_db/Cargo.toml
+    - name: Run tests
+      run: cargo test --verbose --manifest-path crates/crypto_social_db/Cargo.toml
+
+  deploy:
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build and push Docker image
+      # env:
+      #   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      #   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "Building Docker image..."
+        # docker build -t your-docker-username/crypto_social_db:latest -f crates/crypto_social_db/Dockerfile .
+        # echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+        # docker push your-docker-username/crypto_social_db:latest
+    - name: Deploy to server
+      run: |
+        # Add your deployment steps here, e.g., using SSH to connect to your server and update the running container
+        echo "Deploying to server..."
+        # Example: ssh user@your-server-ip 'docker pull your-docker-username/crypto_social_db:latest && docker stop crypto_social_db && docker rm crypto_social_db && docker run -d --name crypto_social_db your-docker-username/crypto_social_db:latest'

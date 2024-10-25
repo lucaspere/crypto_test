@@ -1,1 +1,4 @@
-GET http://localhost:3000/users/3ed27b5b-6089-41cd-afb7-c987cd8af793
+GET http://localhost:3000/users/5a080bfa-cbe5-46bc-9d80-db7ba2c02372
+###
+
+POST http://localhost:3000/users/08a9e9f0-842c-483d-9cfb-14a80c591f2c/follow/5a080bfa-cbe5-46bc-9d80-db7ba2c02372

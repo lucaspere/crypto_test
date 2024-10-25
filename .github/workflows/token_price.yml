@@ -1,0 +1,45 @@
+name: Token Price CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/token_price/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/token_price/**'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose --manifest-path crates/token_price/Cargo.toml
+    - name: Run tests
+      run: cargo test --verbose --manifest-path crates/token_price/Cargo.toml
+
+  deploy:
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build and push Docker image
+      # env:
+        # DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        # DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "Building Docker image..."
+        # docker build -t your-docker-username/token_price:latest -f crates/token_price/Dockerfile .
+        # echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+        # docker push your-docker-username/token_price:latest
+    - name: Deploy to server
+      run: |
+        # Add your deployment steps here, e.g., using SSH to connect to your server and update the running container
+        echo "Deploying to server..."
+        # Example: ssh user@your-server-ip 'docker pull your-docker-username/token_price:latest && docker stop token_price_container && docker run -d --name token_price_container your-docker-username/token_price:latest'

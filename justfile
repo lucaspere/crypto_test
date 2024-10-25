@@ -16,7 +16,7 @@ setup-dev:
 
 # Run database migrations
 run-migrations:
-    sqlx migrate run
+    dbmate --migrations-table social._dbmate_migrations up
 
 # Run database seed
 run-seed:
@@ -57,3 +57,13 @@ prod:
 # Run the application in docker
 docker-run:
     docker compose up --build -d
+
+
+# Initialize database and run migrations
+init-db:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Create the 'social' schema if it doesn't exist
+    psql "${DATABASE_URL}" -c "CREATE SCHEMA IF NOT EXISTS social;"
+    # Run migrations
+    just run-migrations
