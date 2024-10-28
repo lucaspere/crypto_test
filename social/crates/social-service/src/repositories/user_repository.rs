@@ -25,12 +25,12 @@ impl UserRepository {
         follower_id: Uuid,
         followed_id: Uuid,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query!(
-        "INSERT INTO social.user_follows (follower_id, followed_id, created_at) VALUES ($1, $2, $3)",
-        follower_id,
-        followed_id,
-        Utc::now()
+        sqlx::query(
+            "INSERT INTO social.user_follows (follower_id, followed_id, created_at) VALUES ($1, $2, $3)",
         )
+        .bind(follower_id)
+        .bind(followed_id)
+        .bind(Utc::now())
         .execute(self.db.as_ref())
         .await?;
 
@@ -42,13 +42,11 @@ impl UserRepository {
         follower_id: Uuid,
         followed_id: Uuid,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query!(
-            "DELETE FROM social.user_follows WHERE follower_id = $1 AND followed_id = $2",
-            follower_id,
-            followed_id
-        )
-        .execute(self.db.as_ref())
-        .await?;
+        sqlx::query("DELETE FROM social.user_follows WHERE follower_id = $1 AND followed_id = $2")
+            .bind(follower_id)
+            .bind(followed_id)
+            .execute(self.db.as_ref())
+            .await?;
 
         Ok(())
     }

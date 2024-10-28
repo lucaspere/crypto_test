@@ -3,7 +3,6 @@ use chrono::{DateTime, Duration, FixedOffset, Utc};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
-use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub const HIT_MULTIPLIER: u8 = 2;
