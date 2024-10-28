@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{types::JsonRawValue, FromRow};
+use sqlx::FromRow;
 use utoipa::ToSchema;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
