@@ -85,8 +85,6 @@ pub struct GetUserStatsParams {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // #[test]
     // fn test_check_for_hit() {
     //     let mut pick = TokenPick::new();

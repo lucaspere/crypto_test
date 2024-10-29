@@ -7,7 +7,6 @@ use services::{profile_service::ProfileService, user_service::UserService};
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
 use tracing::debug;
-
 pub mod apis;
 pub mod models;
 pub mod repositories;

@@ -1,7 +1,7 @@
 pub mod groups;
-pub mod medals;
 pub mod picks;
 pub mod profiles;
+pub mod tiers;
 pub mod token_picks;
 pub mod tokens;
 pub mod user_comments;

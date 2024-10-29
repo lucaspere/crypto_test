@@ -1,4 +1,4 @@
-use crate::models::medals::TiersType;
+use crate::models::tiers::TiersType;
 use serde::Deserialize;
 use utoipa::ToSchema;
 

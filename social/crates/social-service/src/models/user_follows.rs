@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, FixedOffset};
+use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
