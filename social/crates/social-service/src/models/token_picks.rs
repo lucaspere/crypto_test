@@ -1,27 +1,26 @@
 use super::tokens::Token;
-use chrono::{DateTime, Duration, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub const HIT_MULTIPLIER: u8 = 2;
 
 #[derive(Clone, Debug, FromRow, Serialize, Deserialize, Default)]
 pub struct TokenPick {
-    pub id: Uuid,
+    pub id: i64,
     pub token: Json<Token>,
     pub user_id: Uuid,
-    pub group_id: Uuid,
+    pub group_id: i64,
     pub call_type: String,
     pub price_at_call: Decimal,
-    pub market_cap_at_call: Option<Decimal>,
+    pub market_cap_at_call: Decimal,
     pub supply_at_call: Option<Decimal>,
     pub call_date: DateTime<FixedOffset>,
-    pub created_at: DateTime<FixedOffset>,
     pub highest_market_cap: Option<Decimal>,
     pub hit_date: Option<DateTime<FixedOffset>>,
-    pub points_awarded: bool,
 }
 
 impl TokenPick {
@@ -50,7 +49,7 @@ impl TokenPick {
         if self.hit_date.is_some() {
             return false;
         }
-        let fdv = self.market_cap_at_call.unwrap_or_default();
+        let fdv = self.market_cap_at_call;
         let target_market_cap = fdv * Decimal::from(HIT_MULTIPLIER);
 
         if current_market_cap >= target_market_cap {
@@ -61,25 +60,68 @@ impl TokenPick {
         }
     }
 
-    pub fn award_points(&mut self) -> bool {
-        if self.points_awarded || self.hit_date.is_none() {
-            return false;
-        }
+    // pub fn award_points(&mut self) -> bool {
+    //     if self.points_awarded || self.hit_date.is_none() {
+    //         return false;
+    //     }
 
-        let hit_date = self.hit_date.unwrap();
-        let now: DateTime<FixedOffset> = Utc::now().into();
+    //     let hit_date = self.hit_date.unwrap();
+    //     let now: DateTime<FixedOffset> = Utc::now().into();
 
-        if now - hit_date >= Duration::hours(24) {
-            self.points_awarded = true;
-            true
-        } else {
-            false
+    //     if now - hit_date >= Duration::hours(24) {
+    //         self.points_awarded = true;
+    //         true
+    //     } else {
+    //         false
+    //     }
+    // }
+}
+
+/// The type of call.
+#[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]
+pub enum CallType {
+    /// A general call
+    #[serde(rename = "general")]
+    #[default]
+    General,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]
+pub struct TokenPickResponse {
+    pub id: i64,
+    pub token: Token,
+    /// The user ID
+    pub user_id: Uuid,
+    /// The group ID
+    pub group_id: i64,
+    /// The type of call
+    pub call_type: CallType,
+    /// The price at the time the pick was made
+    pub price_at_call: Decimal,
+    /// The market cap at the time the pick was made
+    pub market_cap_at_call: Decimal,
+    /// The supply at the time the pick was made
+    pub supply_at_call: Option<Decimal>,
+    /// Date the pick was made
+    pub call_date: DateTime<FixedOffset>,
+    /// The highest market cap the pick has reached
+    pub highest_market_cap: Option<Decimal>,
+    /// Date the pick hit
+    pub hit_date: Option<DateTime<FixedOffset>>,
+}
+
+impl From<TokenPick> for TokenPickResponse {
+    fn from(pick: TokenPick) -> Self {
+        Self {
+            token: pick.token.0,
+            ..Default::default()
         }
     }
 }
 
-#[derive(Serialize)]
-pub struct GetUserStatsParams {
+#[derive(Deserialize, Default)]
+pub struct ProfilePicksAndStatsQuery {
+    pub username: String,
     pub multiplier: Option<u8>,
 }
 

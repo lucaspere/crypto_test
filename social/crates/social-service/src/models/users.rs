@@ -1,5 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
-use chrono::{DateTime, FixedOffset};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -9,16 +9,19 @@ use uuid::Uuid;
 pub struct User {
     pub id: Uuid,
     pub username: String,
-    pub telegram_id: Option<String>,
-    pub created_at: Option<DateTime<FixedOffset>>,
-    pub updated_at: Option<DateTime<FixedOffset>>,
+    pub telegram_id: i64,
+    pub selected_wallet_id: Option<Uuid>,
+    pub accepted_tos: Option<NaiveDateTime>,
+    pub waitlisted: bool,
+    pub accepted_insights_risk: Option<NaiveDateTime>,
+    pub created_at: Option<NaiveDateTime>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct UserResponse {
     pub id: Uuid,
     pub username: String,
-    pub telegram_id: Option<String>,
+    pub telegram_id: i64,
 }
 
 impl From<User> for UserResponse {

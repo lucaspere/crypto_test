@@ -6,7 +6,9 @@ use repositories::{token_repository::TokenRepository, user_repository::UserRepos
 use services::{profile_service::ProfileService, user_service::UserService};
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 use tracing::debug;
+
 pub mod apis;
 pub mod models;
 pub mod repositories;
@@ -32,10 +34,12 @@ pub async fn setup_router(
     let (user_service, profile_service) = setup_services(db).await?;
     let router = setup_routes();
 
-    Ok(router.with_state(Arc::new(AppState {
-        user_service,
-        profile_service,
-    })))
+    Ok(router
+        .layer(CorsLayer::permissive())
+        .with_state(Arc::new(AppState {
+            user_service,
+            profile_service,
+        })))
 }
 
 pub async fn setup_services(
