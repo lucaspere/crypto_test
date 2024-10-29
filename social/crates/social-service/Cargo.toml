@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+utoipa = { version = "5.1.2", features = ["axum_extras", "uuid", "decimal", "chrono"] }
+utoipa-axum = { version = "0.1.0" }
+utoipa-scalar = { version = "0.2.0", features = ["axum"] }
 tokio = { workspace = true }
 dotenv = { workspace = true }
 uuid = { workspace = true }
@@ -13,10 +16,6 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
-utoipa = { workspace = true }
-utoipa-scalar = { workspace = true }
-utoipa-axum = { workspace = true }
-futures-util = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }

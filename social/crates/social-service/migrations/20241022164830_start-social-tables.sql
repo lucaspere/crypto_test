@@ -33,13 +33,11 @@ CREATE TABLE IF NOT EXISTS social.token_picks (
     group_id bigint,
     call_type character varying(50) NOT NULL,
     price_at_call numeric(18,8) NOT NULL,
-    market_cap_at_call numeric(18,8) GENERATED ALWAYS AS (COALESCE(market_cap_at_call, price_at_call * supply_at_call)) STORED,
+    market_cap_at_call numeric(18,8),
     supply_at_call numeric(18,8),
-    highest_market_cap numeric(18,8) GENERATED ALWAYS AS (COALESCE(highest_market_cap, price_at_call)) STORED,
+    highest_market_cap numeric(18,8),
     hit_date timestamp with time zone,
     call_date timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT token_picks_token_address_fkey FOREIGN KEY (token_address)
-        REFERENCES social.tokens (address) ON DELETE CASCADE,
     CONSTRAINT token_picks_group_id_fkey FOREIGN KEY (group_id)
         REFERENCES social.groups (id) ON DELETE CASCADE
 );
@@ -74,7 +72,7 @@ CREATE TABLE IF NOT EXISTS social.user_follows (
 );
 
 -- Enum: social.tier_type
-CREATE TYPE social.tier_type AS ENUM ('iron', 'bronze', 'silver', 'gold', 'platinum');
+CREATE TYPE social.tier_type AS ENUM ('iron', 'bronze', 'silver', 'gold', 'platinum', 'emerald', 'diamond');
 
 -- Table: social.user_tiers
 CREATE TABLE IF NOT EXISTS social.user_tiers (
@@ -105,8 +103,8 @@ CREATE INDEX idx_token_picks_call_date ON social.token_picks(call_date);
 CREATE INDEX idx_user_follows_follower_id ON social.user_follows(follower_id);
 CREATE INDEX idx_user_follows_followed_id ON social.user_follows(followed_id);
 
-CREATE INDEX idx_user_medals_user_id ON social.user_medals(user_id);
-CREATE INDEX idx_user_medals_medal_type ON social.user_medals(medal_type);
+CREATE INDEX idx_user_tiers_user_id ON social.user_tiers(user_id);
+CREATE INDEX idx_user_tiers_tier ON social.user_tiers(tier);
 
 CREATE INDEX idx_point_transactions_user_id ON social.point_transactions(user_id);
 CREATE INDEX idx_point_transactions_action_type ON social.point_transactions(action_type);
@@ -118,14 +116,29 @@ CREATE INDEX idx_comments_created_at ON social.comments(created_at);
 
 
 -- migrate:down
-DROP SCHEMA IF EXISTS social CASCADE;
 
+DROP INDEX IF EXISTS idx_token_picks_user_id;
+DROP INDEX IF EXISTS idx_token_picks_token_address;
+DROP INDEX IF EXISTS idx_token_picks_call_date;
+DROP INDEX IF EXISTS idx_user_follows_follower_id;
+DROP INDEX IF EXISTS idx_user_follows_followed_id;
+DROP INDEX IF EXISTS idx_user_tiers_user_id;
+DROP INDEX IF EXISTS idx_user_tiers_tier;
+DROP INDEX IF EXISTS idx_point_transactions_user_id;
+DROP INDEX IF EXISTS idx_point_transactions_action_type;
+DROP INDEX IF EXISTS idx_point_transactions_created_at;
+DROP INDEX IF EXISTS idx_comments_token_pick_id;
+DROP INDEX IF EXISTS idx_comments_user_id;
+DROP INDEX IF EXISTS idx_comments_created_at;
+
+DROP TABLE IF EXISTS social.comments;
 DROP TABLE IF EXISTS social.tokens;
 DROP TABLE IF EXISTS social.token_picks;
 DROP TABLE IF EXISTS social.user_points;
 DROP TABLE IF EXISTS social.user_follows;
 DROP TABLE IF EXISTS social.user_tiers;
 DROP TABLE IF EXISTS social.point_transactions;
-DROP TABLE IF EXISTS social.comments;
 DROP TABLE IF EXISTS social.groups;
 DROP TABLE IF EXISTS social.group_users;
+
+DROP TYPE IF EXISTS social.tier_type;
