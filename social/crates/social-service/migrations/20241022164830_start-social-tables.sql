@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS social.token_picks (
     token_address character varying(255),
     user_id uuid,
     group_id bigint,
-    call_type character varying(50) NOT NULL,
+    telegram_message_id bigint,
     price_at_call numeric(18,8) NOT NULL,
     market_cap_at_call numeric(18,8),
     supply_at_call numeric(18,8),
