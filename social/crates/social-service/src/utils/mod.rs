@@ -2,10 +2,12 @@ use api_errors::ApiError;
 
 pub mod api_errors;
 
-// Define a custom error type
-#[derive(serde::Serialize)]
+/// The API error response.
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct ErrorResponse {
+    /// The error message.
     message: String,
+    /// The error code.
     code: Option<u16>,
 }
 

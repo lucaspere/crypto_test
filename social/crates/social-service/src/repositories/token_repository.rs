@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::models::{
-    token_picks::{GetUserStatsParams, TokenPick},
+    token_picks::{ProfilePicksAndStatsQuery, TokenPick},
     tokens::Token,
 };
 
@@ -29,7 +29,7 @@ impl TokenRepository {
     pub async fn find_token_picks_by_user_id(
         &self,
         user_id: Uuid,
-        params: GetUserStatsParams,
+        params: &ProfilePicksAndStatsQuery,
     ) -> Result<Vec<TokenPick>, sqlx::Error> {
         let mut query = r#"
             SELECT tp.*,

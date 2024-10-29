@@ -55,7 +55,7 @@ impl UserRepository {
         let followers = sqlx::query_as::<_, User>(
             r#"
         SELECT u.id, u.username, u.telegram_id, u.created_at, u.updated_at
-        FROM users u
+        FROM user u
         INNER JOIN social.user_follows uf ON u.id = uf.follower_id
         WHERE uf.followed_id = $1
         "#,
@@ -71,7 +71,7 @@ impl UserRepository {
         let following = sqlx::query_as::<_, User>(
             r#"
         SELECT u.id, u.username, u.telegram_id, u.created_at, u.updated_at
-        FROM users u
+        FROM user u
         INNER JOIN social.user_follows uf ON u.id = uf.followed_id
         WHERE uf.follower_id = $1
         "#,
@@ -83,8 +83,8 @@ impl UserRepository {
         Ok(following)
     }
 
-    pub async fn find_by_username(&self, username: String) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
+    pub async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
+        sqlx::query_as::<_, User>("SELECT * FROM public.user WHERE username = $1")
             .bind(username)
             .fetch_optional(self.db.as_ref())
             .await

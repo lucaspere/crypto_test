@@ -1,4 +1,7 @@
-use axum::http::StatusCode;
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -19,5 +22,11 @@ impl ApiError {
             ApiError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (self.code(), self.to_string()).into_response()
     }
 }

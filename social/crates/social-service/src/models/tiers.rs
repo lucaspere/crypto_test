@@ -11,9 +11,10 @@ pub const TIER_PLATINUM: u64 = 15_000;
 pub const TIER_EMERALD: u64 = 40_000;
 pub const TIER_DIAMOND: u64 = 100_000;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TiersType {
+    #[default]
     Iron = TIER_IRON as isize,
     Bronze = TIER_BRONZE as isize,
     Silver = TIER_SILVER as isize,
