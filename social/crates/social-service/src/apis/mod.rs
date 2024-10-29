@@ -8,6 +8,7 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::AppState;
 
 pub mod profile_handlers;
+pub mod token_handlers;
 pub mod user_handlers;
 
 #[derive(OpenApi)]
@@ -21,6 +22,10 @@ pub struct ApiDoc;
 
 pub fn setup_routes() -> Router<Arc<AppState>> {
     let api_doc = ApiDoc::openapi();
+    let token_router = OpenApiRouter::new().routes(routes!(
+        token_handlers::get_token_picks,
+        token_handlers::post_token_pick
+    ));
     let profile_router = OpenApiRouter::new()
         .routes(routes!(profile_handlers::get_profile))
         .routes(routes!(profile_handlers::get_profile_picks_and_stats))
@@ -36,9 +41,12 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let profile_router =
         OpenApiRouter::with_openapi(api_doc.clone()).nest("/profiles", profile_router);
 
+    let token_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/tokens", token_router);
+
     let router = OpenApiRouter::new()
         .merge(user_router)
-        .merge(profile_router);
+        .merge(profile_router)
+        .merge(token_router);
 
     let (api_router, api_openapi) = OpenApiRouter::new()
         .nest("/api/v1", router)

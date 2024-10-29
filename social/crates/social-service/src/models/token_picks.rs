@@ -88,32 +88,49 @@ pub enum CallType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]
 pub struct TokenPickResponse {
+    /// The pick ID
     pub id: i64,
+    /// The token info
     pub token: Token,
     /// The user ID
     pub user_id: Uuid,
     /// The group ID
     pub group_id: i64,
-    /// The type of call
-    pub call_type: CallType,
-    /// The price at the time the pick was made
-    pub price_at_call: Decimal,
     /// The market cap at the time the pick was made
     pub market_cap_at_call: Decimal,
-    /// The supply at the time the pick was made
-    pub supply_at_call: Option<Decimal>,
     /// Date the pick was made
     pub call_date: DateTime<FixedOffset>,
     /// The highest market cap the pick has reached
+    pub current_market_cap: Decimal,
+    /// The current multiplier of the pick
+    pub current_multiplier: f32,
+    /// The highest market cap the pick has reached
     pub highest_market_cap: Option<Decimal>,
+    /// The multiplier of the pick
+    pub higher_multiplier: f32,
     /// Date the pick hit
     pub hit_date: Option<DateTime<FixedOffset>>,
 }
 
 impl From<TokenPick> for TokenPickResponse {
     fn from(pick: TokenPick) -> Self {
+        let higher_multiplier =
+            (pick.highest_market_cap.unwrap_or_default() / pick.market_cap_at_call).floor();
+        let higher_multiplier = higher_multiplier
+            .to_string()
+            .parse::<f32>()
+            .unwrap_or_default();
+
         Self {
             token: pick.token.0,
+            higher_multiplier,
+            call_date: pick.call_date,
+            group_id: pick.group_id,
+            id: pick.id,
+            user_id: pick.user_id,
+            highest_market_cap: pick.highest_market_cap,
+            hit_date: pick.hit_date,
+            market_cap_at_call: pick.market_cap_at_call,
             ..Default::default()
         }
     }

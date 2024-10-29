@@ -10,7 +10,7 @@ pub struct UserService {
 
 impl UserService {
     pub fn new(user_repository: Arc<UserRepository>) -> Self {
-        UserService { user_repository }
+        Self { user_repository }
     }
 
     pub async fn get_user(&self, id: Uuid) -> Result<Option<UserResponse>, sqlx::Error> {

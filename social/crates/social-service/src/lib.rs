@@ -3,7 +3,9 @@
 use apis::setup_routes;
 use axum::Router;
 use repositories::{token_repository::TokenRepository, user_repository::UserRepository};
-use services::{profile_service::ProfileService, user_service::UserService};
+use services::{
+    profile_service::ProfileService, token_service::TokenService, user_service::UserService,
+};
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -19,6 +21,7 @@ pub mod utils;
 pub struct AppState {
     pub user_service: UserService,
     pub profile_service: ProfileService,
+    pub token_service: TokenService,
 }
 
 pub async fn setup_database(database_url: &str) -> Result<Arc<PgPool>, sqlx::Error> {
@@ -31,7 +34,7 @@ pub async fn setup_router(
 ) -> Result<Router, Box<dyn std::error::Error>> {
     let db = setup_database(&settings.database_url).await?;
     debug!("Connected to the database successfully!");
-    let (user_service, profile_service) = setup_services(db).await?;
+    let (user_service, profile_service, token_service) = setup_services(db).await?;
     let router = setup_routes();
 
     Ok(router
@@ -39,19 +42,21 @@ pub async fn setup_router(
         .with_state(Arc::new(AppState {
             user_service,
             profile_service,
+            token_service,
         })))
 }
 
 pub async fn setup_services(
     db: Arc<PgPool>,
-) -> Result<(UserService, ProfileService), Box<dyn std::error::Error>> {
+) -> Result<(UserService, ProfileService, TokenService), Box<dyn std::error::Error>> {
     let user_repository = Arc::new(UserRepository::new(db.clone()));
     let token_repository = Arc::new(TokenRepository::new(db.clone()));
 
     let user_service = UserService::new(user_repository.clone());
-    let profile_service = ProfileService::new(user_repository, token_repository);
+    let profile_service = ProfileService::new(user_repository, token_repository.clone());
+    let token_service = TokenService::new(token_repository);
 
-    Ok((user_service, profile_service))
+    Ok((user_service, profile_service, token_service))
 }
 
 pub fn init_tracing() {
