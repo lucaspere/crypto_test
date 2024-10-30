@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use get_latest_w_metadata::LatestPriceMetadataResponse;
+use get_latest_w_metadata::LatestTokenMetadataResponse;
 use reqwest::Client;
 use tracing::{error, info};
 
@@ -25,7 +25,7 @@ impl RustMonorepoService {
     pub async fn get_latest_w_metadata(
         &self,
         addresses: Vec<String>,
-    ) -> Result<HashMap<String, LatestPriceMetadataResponse>, ApiError> {
+    ) -> Result<HashMap<String, LatestTokenMetadataResponse>, ApiError> {
         info!(
             "Getting latest with metadata for addresses: {:?}",
             addresses
@@ -44,7 +44,7 @@ impl RustMonorepoService {
             .await?;
 
         let json_str = res.text().await?;
-        let res: Vec<LatestPriceMetadataResponse> =
+        let res: Vec<LatestTokenMetadataResponse> =
             serde_json::from_str(&json_str).map_err(|e| {
                 error!("Error parsing latest with metadata response: {}", e);
                 ApiError::InternalServerError("Internal server error".to_string())

@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
-use tracing::error;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
     models::{
         token_picks::{ProfilePicksAndStatsQuery, TokenPick},
-        tokens::Token,
+        tokens::{Chain, Token},
     },
     utils::api_errors::ApiError,
 };
@@ -23,14 +23,43 @@ impl TokenRepository {
 }
 
 impl TokenRepository {
-    pub async fn find_by_address(&self, address: String) -> Result<Option<Token>, sqlx::Error> {
-        sqlx::query_as::<_, Token>("SELECT * FROM tokens WHERE address = $1")
+    pub async fn get_token(
+        &self,
+        address: &String,
+        chain: Option<String>,
+    ) -> Result<Option<Token>, sqlx::Error> {
+        let chain = chain.unwrap_or(Chain::Solana.to_string());
+        let query = r#"
+            SELECT * FROM social.tokens WHERE address = $1 AND chain = $2
+        "#;
+
+        sqlx::query_as::<_, Token>(query)
             .bind(address)
+            .bind(chain)
             .fetch_optional(self.db.as_ref())
             .await
     }
 
-    pub async fn find_token_picks_by_user_id(
+    pub async fn save_token(&self, token: Token) -> Result<Token, sqlx::Error> {
+        let query = r#"
+            INSERT INTO social.tokens (address, name, symbol, chain)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (address, chain) DO UPDATE SET name = $2, symbol = $3
+			RETURNING *
+        "#;
+
+        let token = sqlx::query_as::<_, Token>(query)
+            .bind(token.address)
+            .bind(token.name)
+            .bind(token.symbol)
+            .bind(token.chain)
+            .fetch_one(self.db.as_ref())
+            .await?;
+
+        Ok(token)
+    }
+
+    pub async fn list_token_picks_by_user_id(
         &self,
         user_id: Uuid,
         params: &ProfilePicksAndStatsQuery,
@@ -54,6 +83,21 @@ impl TokenRepository {
         sqlx::query_as::<_, TokenPick>(query.as_str())
             .bind(user_id)
             .fetch_all(self.db.as_ref())
+            .await
+    }
+
+    pub async fn get_token_pick_by_id(&self, id: i64) -> Result<Option<TokenPick>, sqlx::Error> {
+        let query = r#"
+            SELECT tp.*,
+                   row_to_json(t) AS token
+            FROM social.token_picks tp
+            JOIN social.tokens t ON tp.token_address = t.address
+            WHERE tp.id = $1
+        "#;
+
+        sqlx::query_as::<_, TokenPick>(query)
+            .bind(id)
+            .fetch_optional(self.db.as_ref())
             .await
     }
 
@@ -88,4 +132,37 @@ impl TokenRepository {
         tx.commit().await?;
         Ok(())
     }
+
+    pub async fn save_token_pick(&self, pick: TokenPick) -> Result<TokenPick, sqlx::Error> {
+        let query = r#"
+			INSERT INTO social.token_picks (user_id, group_id, token_address, price_at_call, market_cap_at_call, supply_at_call, call_date, highest_market_cap, hit_date)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id
+		"#;
+        dbg!("test");
+        let result = sqlx::query_as::<_, From>(query)
+            .bind(pick.user_id)
+            .bind(pick.group_id)
+            .bind(pick.token.address.clone())
+            .bind(pick.price_at_call)
+            .bind(pick.market_cap_at_call)
+            .bind(pick.supply_at_call)
+            .bind(pick.call_date)
+            .bind(pick.highest_market_cap)
+            .bind(pick.hit_date)
+            .fetch_one(self.db.as_ref())
+            .await?;
+        if result.id == 1 {
+            info!("Successfully saved token pick with id {}", pick.id);
+        }
+
+        let token_pick = self.get_token_pick_by_id(result.id).await?;
+
+        Ok(token_pick.unwrap_or_default())
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct From {
+    id: i64,
 }

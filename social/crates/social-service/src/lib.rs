@@ -2,10 +2,7 @@
 
 use apis::setup_routes;
 use axum::Router;
-use external_services::{
-    birdeye::BirdeyeService,
-    rust_monorepo::{RustMonorepoService},
-};
+use external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService};
 use repositories::{token_repository::TokenRepository, user_repository::UserRepository};
 use services::{
     profile_service::ProfileService, token_service::TokenService, user_service::UserService,
@@ -62,10 +59,14 @@ pub async fn setup_services(
     let profile_service = ProfileService::new(
         user_repository,
         token_repository.clone(),
-        rust_monorepo,
+        rust_monorepo.clone(),
         birdeye_service,
     );
-    let token_service = TokenService::new(token_repository);
+    let token_service = TokenService::new(
+        token_repository,
+        rust_monorepo,
+        Arc::new(user_service.clone()),
+    );
 
     Ok((user_service, profile_service, token_service))
 }

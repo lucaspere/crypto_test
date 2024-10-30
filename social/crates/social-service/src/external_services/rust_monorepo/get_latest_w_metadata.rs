@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct LatestPriceMetadataResponse {
+pub struct LatestTokenMetadataResponse {
     pub address: String,
     pub price: Decimal,
     pub price_fetched_at_unix_time: i64,
@@ -14,11 +14,11 @@ pub struct LatestPriceMetadataResponse {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct BirdEyeMetadataDataProperty {
-    name: String,
-    symbol: String,
-    decimals: usize,
+    pub name: String,
+    pub symbol: String,
+    pub decimals: usize,
     #[serde(rename = "logoURI")]
-    logo_uri: Option<String>,
+    pub logo_uri: Option<String>,
     extensions: Option<BirdEyeMetadataExtensionsProperty>,
     pub liquidity: Option<Decimal>,
     last_trade_unix_time: Option<i64>,

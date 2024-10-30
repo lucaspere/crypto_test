@@ -14,7 +14,7 @@ pub struct TokenPick {
     pub token: Json<Token>,
     pub user_id: Uuid,
     pub group_id: i64,
-    pub call_type: String,
+    pub telegram_message_id: Option<i64>,
     pub price_at_call: Decimal,
     pub market_cap_at_call: Decimal,
     pub supply_at_call: Option<Decimal>,
@@ -75,15 +75,6 @@ impl TokenPick {
     //         false
     //     }
     // }
-}
-
-/// The type of call.
-#[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]
-pub enum CallType {
-    /// A general call
-    #[serde(rename = "general")]
-    #[default]
-    General,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]

@@ -41,7 +41,8 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let profile_router =
         OpenApiRouter::with_openapi(api_doc.clone()).nest("/profiles", profile_router);
 
-    let token_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/tokens", token_router);
+    let token_router =
+        OpenApiRouter::with_openapi(api_doc.clone()).nest("/tokens/picks", token_router);
 
     let router = OpenApiRouter::new()
         .merge(user_router)
