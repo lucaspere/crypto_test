@@ -7,6 +7,8 @@ pub struct Settings {
     pub database_url: String,
     pub redis_url: String,
     pub port: Option<u16>,
+    pub rust_monorepo_url: String,
+    pub birdeye_api_key: String,
 }
 
 pub fn load_settings() -> Result<Settings, config::ConfigError> {

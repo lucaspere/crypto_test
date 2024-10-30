@@ -6,9 +6,9 @@ use tracing::{debug, error};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    social_service::init_tracing();
-
     let settings = settings::load_settings().expect("Failed to load settings");
+    social_service::init_tracing(&settings);
+
     let port = settings.port.unwrap_or(3000);
 
     if settings.environment == Some("DEV".to_string()) {
