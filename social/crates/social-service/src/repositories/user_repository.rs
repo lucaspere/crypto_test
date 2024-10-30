@@ -13,8 +13,18 @@ impl UserRepository {
         UserRepository { db }
     }
 
+    pub async fn find_by_telegram_user_id(
+        &self,
+        telegram_user_id: i64,
+    ) -> Result<Option<User>, sqlx::Error> {
+        sqlx::query_as::<_, User>("SELECT * FROM public.user WHERE telegram_id = $1")
+            .bind(telegram_user_id)
+            .fetch_optional(self.db.as_ref())
+            .await
+    }
+
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+        sqlx::query_as::<_, User>("SELECT * FROM public.user WHERE id = $1")
             .bind(id)
             .fetch_optional(self.db.as_ref())
             .await
