@@ -13,7 +13,7 @@ pub struct ProfilePickSummary {
     /// The sum total of all of a user's picks expressed as an integer.
     total_picks: i32,
     /// Percentage of the user's picks that have achieved a return of 2x or more since they were made.
-    hit_hate: Decimal,
+    hit_rate: Decimal,
     /// Total returns of a user's picks expressed as a multiple.
     pick_returns: Decimal,
     /// Total realized PnL for that user's Bullpen wallet expressed as a dollar amount.
@@ -24,7 +24,7 @@ impl From<UserStats> for ProfilePickSummary {
     fn from(stats: UserStats) -> Self {
         ProfilePickSummary {
             total_picks: stats.total_picks,
-            hit_hate: stats.hit_rate,
+            hit_rate: stats.hit_rate,
             pick_returns: stats.pick_returns,
             realized_profit: stats.realized_profit,
         }

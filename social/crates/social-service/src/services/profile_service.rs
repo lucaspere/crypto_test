@@ -1,8 +1,11 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
+use chrono::Utc;
 use rust_decimal::Decimal;
+use tracing::{error, info};
 
 use crate::{
+    external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
         token_picks::{ProfilePicksAndStatsQuery, TokenPick},
@@ -16,16 +19,22 @@ use crate::{
 pub struct ProfileService {
     user_repository: Arc<UserRepository>,
     token_repository: Arc<TokenRepository>,
+    rust_monorepo_service: Arc<RustMonorepoService>,
+    birdeye_service: Arc<BirdeyeService>,
 }
 
 impl ProfileService {
     pub fn new(
         user_repository: Arc<UserRepository>,
         token_repository: Arc<TokenRepository>,
+        rust_monorepo_service: Arc<RustMonorepoService>,
+        birdeye_service: Arc<BirdeyeService>,
     ) -> Self {
         ProfileService {
             user_repository,
             token_repository,
+            rust_monorepo_service,
+            birdeye_service,
         }
     }
 
@@ -48,20 +57,66 @@ impl ProfileService {
         username: &str,
         params: &ProfilePicksAndStatsQuery,
     ) -> Result<(Vec<TokenPick>, UserStats), ApiError> {
+        // Get user and their picks
         let user = self
             .user_repository
             .find_by_username(&username)
             .await?
             .ok_or(ApiError::UserNotFound)?;
 
-        let picks = self
+        let mut picks = self
             .token_repository
             .find_token_picks_by_user_id(user.id, params)
             .await?;
 
+        if picks.is_empty() {
+            return Ok((vec![], UserStats::default()));
+        }
+
+        let mut picks_to_update = HashMap::with_capacity(picks.len());
+
+        let latest_prices = self
+            .rust_monorepo_service
+            .get_latest_w_metadata(picks.iter().map(|p| p.token.address.clone()).collect())
+            .await?;
+
+        for pick in &mut picks {
+            let latest_price = latest_prices
+                .get(&pick.token.address)
+                .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
+
+            let highest_price = self
+                .birdeye_service
+                .get_ohlcv_request(
+                    &pick.token.chain,
+                    &pick.token.address,
+                    pick.call_date.timestamp(),
+                    latest_price.price_fetched_at_unix_time,
+                    "15m",
+                )
+                .await?;
+
+            let highest_market_cap =
+                highest_price.high * latest_price.metadata.supply.unwrap_or_default();
+
+            // Update pick if we found a new highest market cap
+            if highest_market_cap > pick.market_cap_at_call {
+                pick.highest_market_cap = Some(highest_market_cap);
+                picks_to_update.insert(pick.id, pick.clone());
+            }
+
+            // Check and update 2x hit status
+            let hit_2x = calculate_return(pick, highest_market_cap) >= Decimal::from(2);
+            if hit_2x && pick.hit_date.is_none() {
+                pick.hit_date = Some(Utc::now().into());
+                picks_to_update.insert(pick.id, pick.clone());
+            }
+        }
+
+        // Calculate stats
         let total_picks = picks.len() as i32;
-        let hits: Vec<&TokenPick> = picks.iter().filter(|p| p.hit_date.is_some()).collect();
-        let total_hits = hits.len() as i32;
+        let total_hits = picks.iter().filter(|p| p.hit_date.is_some()).count() as i32;
+
         let hit_rate = if total_picks > 0 {
             let hits_2x = picks
                 .iter()
@@ -75,6 +130,7 @@ impl ProfileService {
             Decimal::ZERO
         };
 
+        // Calculate returns and find best pick
         let (pick_returns, best_pick) = picks.iter().fold(
             (Decimal::ZERO, None::<BestPick>),
             |(acc_returns, best), pick| {
@@ -111,6 +167,18 @@ impl ProfileService {
             misses: total_picks - total_hits,
             best_pick: best_pick.unwrap_or_default(),
         };
+
+        // Update picks in database if needed
+        if !picks_to_update.is_empty() {
+            info!("Updating {} token picks", picks_to_update.len());
+            if let Err(e) = self
+                .token_repository
+                .update_token_picks(picks_to_update.values().cloned().collect())
+                .await
+            {
+                error!("Failed to update token picks: {}", e);
+            }
+        }
 
         Ok((picks, stats))
     }

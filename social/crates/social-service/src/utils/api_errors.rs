@@ -8,6 +8,9 @@ pub enum ApiError {
     #[error("User not found")]
     UserNotFound,
 
+    #[error("Request error: {0}")]
+    RequestError(#[from] reqwest::Error),
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
 
@@ -21,6 +24,7 @@ impl ApiError {
             ApiError::UserNotFound => StatusCode::NOT_FOUND,
             ApiError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::RequestError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

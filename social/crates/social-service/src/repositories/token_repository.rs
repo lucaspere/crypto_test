@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
+use tracing::error;
 use uuid::Uuid;
 
-use crate::models::{
-    token_picks::{ProfilePicksAndStatsQuery, TokenPick},
-    tokens::Token,
+use crate::{
+    models::{
+        token_picks::{ProfilePicksAndStatsQuery, TokenPick},
+        tokens::Token,
+    },
+    utils::api_errors::ApiError,
 };
 
 pub struct TokenRepository {
@@ -51,5 +55,37 @@ impl TokenRepository {
             .bind(user_id)
             .fetch_all(self.db.as_ref())
             .await
+    }
+
+    pub async fn update_token_picks(&self, picks: Vec<TokenPick>) -> Result<(), ApiError> {
+        let query = r#"
+			UPDATE social.token_picks
+			SET highest_market_cap = $1,
+				hit_date = $2
+			WHERE id = $3
+		"#
+        .to_string();
+
+        let mut tx = self.db.begin().await?;
+
+        for pick in picks {
+            let result = sqlx::query(&query)
+                .bind(pick.highest_market_cap)
+                .bind(pick.hit_date)
+                .bind(pick.id)
+                .execute(tx.as_mut())
+                .await?;
+
+            if result.rows_affected() != 1 {
+                error!("Failed to update token pick: {}", result.rows_affected());
+                tx.rollback().await?;
+                return Err(ApiError::InternalServerError(
+                    "Failed to update token pick".to_string(),
+                ));
+            }
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 }
