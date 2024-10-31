@@ -5,7 +5,8 @@ use axum::Router;
 use external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService};
 use repositories::{token_repository::TokenRepository, user_repository::UserRepository};
 use services::{
-    profile_service::ProfileService, token_service::TokenService, user_service::UserService,
+    profile_service::ProfileService, redis_service::RedisService, token_service::TokenService,
+    user_service::UserService,
 };
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
@@ -52,7 +53,7 @@ pub async fn setup_services(
 ) -> Result<(UserService, ProfileService, TokenService), Box<dyn std::error::Error>> {
     let user_repository = Arc::new(UserRepository::new(db.clone()));
     let token_repository = Arc::new(TokenRepository::new(db.clone()));
-
+    let redis_service = Arc::new(RedisService::new(&settings.redis_url).await?);
     let user_service = UserService::new(user_repository.clone());
     let birdeye_service = Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone()));
     let rust_monorepo = Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
@@ -61,11 +62,13 @@ pub async fn setup_services(
         token_repository.clone(),
         rust_monorepo.clone(),
         birdeye_service,
+        redis_service.clone(),
     );
     let token_service = TokenService::new(
         token_repository,
         rust_monorepo,
         Arc::new(user_service.clone()),
+        redis_service,
     );
 
     Ok((user_service, profile_service, token_service))
