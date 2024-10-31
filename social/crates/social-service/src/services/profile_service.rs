@@ -12,7 +12,10 @@ use crate::{
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         user_stats::{BestPick, UserStats},
     },
-    repositories::{token_repository::TokenRepository, user_repository::UserRepository},
+    repositories::{
+        token_repository::{ListTokenPicksParams, TokenRepository},
+        user_repository::UserRepository,
+    },
     utils::api_errors::ApiError,
 };
 
@@ -48,7 +51,10 @@ impl ProfileService {
 
     pub async fn get_profile(&self, username: &str) -> Result<ProfileDetailsResponse, ApiError> {
         let (_, stats) = self
-            .get_user_picks_and_stats(username, &ProfilePicksAndStatsQuery::default())
+            .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
+                username: username.to_string(),
+                ..Default::default()
+            })
             .await?;
         let response = ProfileDetailsResponse {
             username: username.to_string(),
@@ -62,39 +68,42 @@ impl ProfileService {
 
     pub async fn get_user_picks_and_stats(
         &self,
-        username: &str,
         params: &ProfilePicksAndStatsQuery,
     ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
-        let cache_key = format!("user_picks_stats:{}", username);
+        let cache_key = format!("user_picks_stats:{}", params.username);
         debug!("Checking cache for key: {}", cache_key);
         if let Ok(Some(cached)) = self
             .redis_service
             .get_cached::<(Vec<TokenPickResponse>, UserStats)>(&cache_key)
             .await
         {
-            info!("Cache hit for user picks and stats for {}", username);
+            info!("Cache hit for user picks and stats for {}", params.username);
             return Ok(cached);
         }
         debug!("Cache miss for key: {}", cache_key);
-        info!("Getting user picks and stats for {}", username);
+        info!("Getting user picks and stats for {}", params.username);
 
         let user = self
             .user_repository
-            .find_by_username(&username)
+            .find_by_username(&params.username)
             .await?
             .ok_or(ApiError::UserNotFound)?;
 
+        let paramsx = ListTokenPicksParams {
+            user_id: Some(user.id),
+        };
+
         let mut picks = self
             .token_repository
-            .list_token_picks_by_user_id(user.id, Some(params))
+            .list_token_picks(Some(&paramsx))
             .await?;
 
         if picks.is_empty() {
-            info!("No picks found for user {}", username);
+            info!("No picks found for user {}", params.username);
             return Ok((vec![], UserStats::default()));
         }
 
-        info!("Found {} picks for user {}", picks.len(), username);
+        info!("Found {} picks for user {}", picks.len(), params.username);
 
         let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
         let latest_prices_future = self
@@ -228,7 +237,7 @@ impl ProfileService {
 
         info!(
             "Stats for {}: {} picks, {}% hit rate, {} hits, {} misses",
-            username,
+            params.username,
             total_picks,
             hit_rate,
             total_hits,
@@ -275,7 +284,7 @@ mod tests {
     #[test]
     fn test_calculate_return() {
         let market_cap_at_call = Decimal::from_f64(11198827442.235176380912373735).unwrap();
-        let highest_market_cap = Decimal::from_f64(200.5353).unwrap();
+        let _ = Decimal::from_f64(200.5353).unwrap();
         let rounded = market_cap_at_call.round_dp(8);
         assert_eq!(rounded, Decimal::from_f64(11198827442.24).unwrap());
     }

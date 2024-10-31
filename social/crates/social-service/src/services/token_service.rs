@@ -10,7 +10,7 @@ use crate::{
         token_picks::TokenPick,
         tokens::{Token, TokenPickRequest},
     },
-    repositories::token_repository::TokenRepository,
+    repositories::token_repository::{ListTokenPicksParams, TokenRepository},
     services::user_service::UserService,
     utils::api_errors::ApiError,
 };
@@ -40,14 +40,18 @@ impl TokenService {
     }
 
     pub async fn list_token_picks(&self, query: TokenQuery) -> Result<Vec<TokenPick>, ApiError> {
-        let user = self
-            .user_service
-            .get_user_by_username(&query.username)
-            .await?
-            .ok_or_else(|| ApiError::UserNotFound)?;
+        let user = if let Some(username) = query.username {
+            self.user_service.get_user_by_username(&username).await?
+        } else {
+            None
+        };
 
+        let params = ListTokenPicksParams {
+            user_id: user.map(|u| u.id),
+        };
+        debug!("Listing token picks with params: {:?}", params);
         self.token_repository
-            .list_token_picks_by_user_id(user.id, None)
+            .list_token_picks(Some(&params))
             .await
             .map_err(ApiError::from)
     }

@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     models::{
-        token_picks::{ProfilePicksAndStatsQuery, TokenPick},
+        token_picks::TokenPick,
         tokens::{Chain, Token},
     },
     utils::api_errors::ApiError,
@@ -20,6 +20,11 @@ impl TokenRepository {
     pub fn new(db: Arc<PgPool>) -> Self {
         Self { db }
     }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct ListTokenPicksParams {
+    pub user_id: Option<Uuid>,
 }
 
 impl TokenRepository {
@@ -59,33 +64,28 @@ impl TokenRepository {
         Ok(token)
     }
 
-    pub async fn list_token_picks_by_user_id(
+    pub async fn list_token_picks(
         &self,
-        user_id: Uuid,
-        params: Option<&ProfilePicksAndStatsQuery>,
+        params: Option<&ListTokenPicksParams>,
     ) -> Result<Vec<TokenPick>, sqlx::Error> {
         let mut query = r#"
             SELECT tp.*,
                    row_to_json(t) AS token
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
-            WHERE tp.user_id = $1
         "#
         .to_string();
 
+        let mut query_builder = sqlx::query_as::<_, TokenPick>(&query);
+
         if let Some(params) = params {
-            if let Some(multiplier) = params.multiplier {
-                query += &format!(
-                " AND COALESCE(tp.highest_market_cap / NULLIF(tp.market_cap_at_call, 0), 0) >= {}",
-                multiplier
-                );
+            if let Some(user_id) = params.user_id {
+                query += " WHERE tp.user_id = $1";
+                query_builder = sqlx::query_as(&query).bind(user_id);
             }
         }
 
-        sqlx::query_as::<_, TokenPick>(query.as_str())
-            .bind(user_id)
-            .fetch_all(self.db.as_ref())
-            .await
+        query_builder.fetch_all(self.db.as_ref()).await
     }
 
     pub async fn get_token_pick_by_id(&self, id: i64) -> Result<Option<TokenPick>, sqlx::Error> {
