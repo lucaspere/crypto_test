@@ -34,7 +34,8 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
 
     let user_router = OpenApiRouter::new()
         .routes(routes!(user_handlers::follow_user))
-        .routes(routes!(user_handlers::unfollow_user));
+        .routes(routes!(user_handlers::unfollow_user))
+        .routes(routes!(user_handlers::get_user_followers));
 
     let user_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/users", user_router);
 

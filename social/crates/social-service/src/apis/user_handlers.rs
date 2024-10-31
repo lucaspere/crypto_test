@@ -10,7 +10,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::AppState;
+use crate::{models::users::UserResponse, utils::api_errors::ApiError, AppState};
 
 const TAG: &str = "user";
 
@@ -74,4 +74,25 @@ pub async fn unfollow_user(
         Ok(_) => StatusCode::OK.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
+}
+
+#[utoipa::path(
+    get,
+    tag = TAG,
+    path = "/{id}/followers",
+    responses(
+        (status = 200, description = "User followers", body = Vec<UserResponse>)
+    ),
+    params((
+        "id" = Uuid,
+        Path,
+    ))
+)]
+pub async fn get_user_followers(
+    State(app_state): State<Arc<AppState>>,
+    Path(user_id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let followers = app_state.user_service.get_followers(user_id).await?;
+
+    Ok((StatusCode::OK, Json(followers)))
 }
