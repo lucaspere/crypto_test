@@ -113,12 +113,21 @@ impl TokenRepository {
         let mut tx = self.db.begin().await?;
 
         for pick in picks {
+            let highest_market_cap = pick.highest_market_cap.unwrap_or_default();
+            let rounded_market_cap = highest_market_cap.round_dp(8);
+
             let result = sqlx::query(&query)
-                .bind(pick.highest_market_cap)
+                .bind(rounded_market_cap)
                 .bind(pick.hit_date)
                 .bind(pick.id)
                 .execute(tx.as_mut())
-                .await?;
+                .await
+                .map_err(|e| {
+                    println!("{:?}", rounded_market_cap);
+                    println!("{:#?}", pick);
+                    error!("Failed to update token pick: {}", e);
+                    e
+                })?;
 
             if result.rows_affected() != 1 {
                 error!("Failed to update token pick: {}", result.rows_affected());
@@ -139,7 +148,6 @@ impl TokenRepository {
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id
 		"#;
-        dbg!("test");
         let result = sqlx::query_as::<_, From>(query)
             .bind(pick.user_id)
             .bind(pick.group_id)

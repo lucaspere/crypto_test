@@ -26,10 +26,6 @@ impl RustMonorepoService {
         &self,
         addresses: Vec<String>,
     ) -> Result<HashMap<String, LatestTokenMetadataResponse>, ApiError> {
-        info!(
-            "Getting latest with metadata for addresses: {:?}",
-            addresses
-        );
         let body = serde_json::to_string(&addresses)
             .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
         let res = self

@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = social_service::setup_router(&settings).await?;
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", 3001)).await?;
     debug!(
         "Server running on http://{}",
         listener.local_addr().unwrap()

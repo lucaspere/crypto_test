@@ -8,7 +8,7 @@ use crate::{
     external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
-        token_picks::{ProfilePicksAndStatsQuery, TokenPick},
+        token_picks::{ProfilePicksAndStatsQuery, TokenPick, TokenPickResponse},
         user_stats::{BestPick, UserStats},
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
@@ -56,8 +56,9 @@ impl ProfileService {
         &self,
         username: &str,
         params: &ProfilePicksAndStatsQuery,
-    ) -> Result<(Vec<TokenPick>, UserStats), ApiError> {
-        // Get user and their picks
+    ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
+        info!("Getting user picks and stats for {}", username);
+
         let user = self
             .user_repository
             .find_by_username(&username)
@@ -70,15 +71,23 @@ impl ProfileService {
             .await?;
 
         if picks.is_empty() {
+            info!("No picks found for user {}", username);
             return Ok((vec![], UserStats::default()));
         }
 
-        let mut picks_to_update = HashMap::with_capacity(picks.len());
+        info!("Found {} picks for user {}", picks.len(), username);
 
+        let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
         let latest_prices = self
             .rust_monorepo_service
-            .get_latest_w_metadata(picks.iter().map(|p| p.token.address.clone()).collect())
+            .get_latest_w_metadata(token_addresses)
             .await?;
+
+        let mut picks_to_update = HashMap::with_capacity(picks.len());
+        let mut pick_responses = Vec::with_capacity(picks.len());
+        let mut total_returns = Decimal::ZERO;
+        let mut best_pick = None::<BestPick>;
+        let mut hits_2x = 0;
 
         for pick in &mut picks {
             let latest_price = latest_prices
@@ -96,77 +105,103 @@ impl ProfileService {
                 )
                 .await?;
 
-            let highest_market_cap =
-                highest_price.high * latest_price.metadata.supply.unwrap_or_default();
+            let supply = latest_price.metadata.supply.unwrap_or_default();
+            let highest_market_cap = highest_price.high * supply;
+            let current_market_cap = latest_price.price * supply;
 
-            // Update pick if we found a new highest market cap
-            if highest_market_cap > pick.market_cap_at_call {
+            if highest_market_cap > pick.highest_market_cap.unwrap_or_default() {
+                info!(
+                    "New highest market cap for token {}: {}",
+                    pick.token.symbol, highest_market_cap
+                );
                 pick.highest_market_cap = Some(highest_market_cap);
                 picks_to_update.insert(pick.id, pick.clone());
             }
 
             // Check and update 2x hit status
-            let hit_2x = calculate_return(pick, highest_market_cap) >= Decimal::from(2);
-            if hit_2x && pick.hit_date.is_none() {
-                pick.hit_date = Some(Utc::now().into());
-                picks_to_update.insert(pick.id, pick.clone());
+            let hit_2x = calculate_return(
+                &pick.market_cap_at_call,
+                &pick.highest_market_cap.unwrap_or_default(),
+            ) >= Decimal::from(2);
+            if hit_2x {
+                hits_2x += 1;
+                if pick.hit_date.is_none() {
+                    info!("Token {} hit 2x", pick.token.symbol);
+                    pick.hit_date = Some(Utc::now().into());
+                    picks_to_update.insert(pick.id, pick.clone());
+                }
             }
+
+            // Create pick response and update stats
+            let mut pick_response = TokenPickResponse::from(pick.clone());
+            pick_response.current_market_cap =
+                latest_price.metadata.mc.unwrap_or_default().round_dp(2);
+            pick_response.current_multiplier = calculate_return(
+                &pick_response.market_cap_at_call,
+                &pick_response.current_market_cap,
+            )
+            .round_dp(2)
+            .to_string()
+            .parse::<f32>()
+            .unwrap_or_default();
+
+            // Update best pick and total returns
+            let current_return = calculate_return(&pick.market_cap_at_call, &highest_market_cap);
+            total_returns += current_return;
+
+            let new_best = BestPick {
+                token_symbol: pick.token.symbol.clone(),
+                token_address: pick.token.address.clone(),
+                multiplier: current_return,
+            };
+
+            best_pick = match best_pick {
+                Some(b) if current_return > b.multiplier => Some(new_best),
+                None => Some(new_best),
+                b => b,
+            };
+
+            pick_responses.push(pick_response);
         }
 
-        // Calculate stats
-        let total_picks = picks.len() as i32;
-        let total_hits = picks.iter().filter(|p| p.hit_date.is_some()).count() as i32;
+        let total_picks = pick_responses.len() as i32;
+        let total_hits = pick_responses
+            .iter()
+            .filter(|p| p.hit_date.is_some())
+            .count() as i32;
 
         let hit_rate = if total_picks > 0 {
-            let hits_2x = picks
-                .iter()
-                .filter(|p| {
-                    calculate_return(p, p.highest_market_cap.unwrap_or_default())
-                        >= Decimal::from(2)
-                })
-                .count() as i32;
             Decimal::from(hits_2x * 100) / Decimal::from(total_picks)
         } else {
             Decimal::ZERO
         };
 
-        // Calculate returns and find best pick
-        let (pick_returns, best_pick) = picks.iter().fold(
-            (Decimal::ZERO, None::<BestPick>),
-            |(acc_returns, best), pick| {
-                let highest_market_cap = pick.highest_market_cap.unwrap_or_default();
-                let current_return = calculate_return(pick, highest_market_cap);
-                let best_pick = BestPick {
-                    token_symbol: pick.token.symbol.clone(),
-                    token_address: pick.token.address.clone(),
-                    multiplier: current_return,
-                };
-                let new_best = match best {
-                    Some(b) if current_return > b.multiplier => Some(best_pick),
-                    None => Some(best_pick),
-                    _ => best,
-                };
-                (acc_returns + current_return, new_best)
-            },
-        );
-
         let average_pick_return = if total_picks > 0 {
-            pick_returns / Decimal::from(total_picks)
+            total_returns / Decimal::from(total_picks)
         } else {
             Decimal::ZERO
         };
 
         let stats = UserStats {
             total_picks,
-            hit_rate,
-            pick_returns,
-            average_pick_return,
+            hit_rate: hit_rate.round_dp(2),
+            pick_returns: total_returns.round_dp(2),
+            average_pick_return: average_pick_return.round_dp(2),
             realized_profit: Decimal::ZERO,     // TODO: Implement
             total_volume_traded: Decimal::ZERO, // TODO: Implement
             hits: total_hits,
             misses: total_picks - total_hits,
             best_pick: best_pick.unwrap_or_default(),
         };
+
+        info!(
+            "Stats for {}: {} picks, {}% hit rate, {} hits, {} misses",
+            username,
+            total_picks,
+            hit_rate,
+            total_hits,
+            total_picks - total_hits
+        );
 
         // Update picks in database if needed
         if !picks_to_update.is_empty() {
@@ -180,14 +215,25 @@ impl ProfileService {
             }
         }
 
-        Ok((picks, stats))
+        Ok((pick_responses, stats))
     }
 }
 
-fn calculate_return(pick: &TokenPick, highest_market_cap: Decimal) -> Decimal {
-    if highest_market_cap > pick.market_cap_at_call {
-        highest_market_cap / pick.market_cap_at_call
-    } else {
-        Decimal::ZERO
+fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
+    highest_market_cap / market_cap_at_call
+}
+
+#[cfg(test)]
+mod tests {
+    use rust_decimal::prelude::FromPrimitive;
+
+    use super::*;
+
+    #[test]
+    fn test_calculate_return() {
+        let market_cap_at_call = Decimal::from_f64(11198827442.235176380912373735).unwrap();
+        let highest_market_cap = Decimal::from_f64(200.5353).unwrap();
+        let rounded = market_cap_at_call.round_dp(8);
+        assert_eq!(rounded, Decimal::from_f64(11198827442.24).unwrap());
     }
 }

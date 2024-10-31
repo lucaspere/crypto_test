@@ -128,9 +128,6 @@ pub(super) async fn get_profile_picks_and_stats(
 
     Ok((
         StatusCode::OK,
-        Json(ProfilePicksAndStatsResponse {
-            picks: picks.into_iter().map(TokenPickResponse::from).collect(),
-            stats,
-        }),
+        Json(ProfilePicksAndStatsResponse { picks, stats }),
     ))
 }

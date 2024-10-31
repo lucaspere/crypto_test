@@ -78,6 +78,7 @@ impl TokenPick {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TokenPickResponse {
     /// The pick ID
     pub id: i64,
@@ -96,32 +97,32 @@ pub struct TokenPickResponse {
     /// The current multiplier of the pick
     pub current_multiplier: f32,
     /// The highest market cap the pick has reached
-    pub highest_market_cap: Option<Decimal>,
+    pub highest_mc_post_call: Option<Decimal>,
     /// The multiplier of the pick
-    pub higher_multiplier: f32,
+    pub highest_mult_post_call: f32,
     /// Date the pick hit
     pub hit_date: Option<DateTime<FixedOffset>>,
 }
 
 impl From<TokenPick> for TokenPickResponse {
     fn from(pick: TokenPick) -> Self {
-        let higher_multiplier =
-            (pick.highest_market_cap.unwrap_or_default() / pick.market_cap_at_call).floor();
-        let higher_multiplier = higher_multiplier
+        let highest_mult_post_call =
+            (pick.highest_market_cap.unwrap_or_default() / pick.market_cap_at_call).round_dp(2);
+        let highest_mult_post_call = highest_mult_post_call
             .to_string()
             .parse::<f32>()
             .unwrap_or_default();
 
         Self {
             token: pick.token.0,
-            higher_multiplier,
+            highest_mult_post_call,
             call_date: pick.call_date,
             group_id: pick.group_id,
             id: pick.id,
             user_id: pick.user_id,
-            highest_market_cap: pick.highest_market_cap,
+            highest_mc_post_call: pick.highest_market_cap.map(|mc| mc.round_dp(2)),
             hit_date: pick.hit_date,
-            market_cap_at_call: pick.market_cap_at_call,
+            market_cap_at_call: pick.market_cap_at_call.round_dp(2),
             ..Default::default()
         }
     }
