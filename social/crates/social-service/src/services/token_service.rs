@@ -14,10 +14,13 @@ use crate::{
     utils::api_errors::ApiError,
 };
 
+use super::redis_service::RedisService;
+
 pub struct TokenService {
     token_repository: Arc<TokenRepository>,
     rust_monorepo_service: Arc<RustMonorepoService>,
     user_service: Arc<UserService>,
+    redis_service: Arc<RedisService>,
 }
 
 impl TokenService {
@@ -25,11 +28,13 @@ impl TokenService {
         token_repository: Arc<TokenRepository>,
         rust_monorepo_service: Arc<RustMonorepoService>,
         user_service: Arc<UserService>,
+        redis_service: Arc<RedisService>,
     ) -> Self {
         Self {
             token_repository,
             rust_monorepo_service,
             user_service,
+            redis_service,
         }
     }
 
@@ -100,6 +105,12 @@ impl TokenService {
         let token_pick = self.token_repository.save_token_pick(token_pick).await?;
 
         info!("Successfully saved token pick with id {}", token_pick.id);
+
+        let cache_key = format!("user_picks_stats:{}", user.username);
+        if let Err(e) = self.redis_service.delete_cached(&cache_key).await {
+            error!("Failed to invalidate cache: {}", e);
+        }
+
         Ok(token_pick)
     }
 }

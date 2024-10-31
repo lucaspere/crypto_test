@@ -24,5 +24,7 @@ tracing-subscriber = { workspace = true }
 config = { workspace = true }
 tower-http = { workspace = true, features = ["cors"] }
 reqwest = { workspace = true }
+futures = { workspace = true }
+redis = { workspace = true }
 
 [dev-dependencies]

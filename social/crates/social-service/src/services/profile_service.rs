@@ -1,19 +1,24 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
+use futures::future::join_all;
 use rust_decimal::Decimal;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{
     external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
-        token_picks::{ProfilePicksAndStatsQuery, TokenPick, TokenPickResponse},
+        token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         user_stats::{BestPick, UserStats},
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
     utils::api_errors::ApiError,
 };
+
+use super::redis_service::RedisService;
+
+const CACHE_TTL_SECONDS: u64 = 300; // 5
 
 #[derive(Clone)]
 pub struct ProfileService {
@@ -21,6 +26,7 @@ pub struct ProfileService {
     token_repository: Arc<TokenRepository>,
     rust_monorepo_service: Arc<RustMonorepoService>,
     birdeye_service: Arc<BirdeyeService>,
+    redis_service: Arc<RedisService>,
 }
 
 impl ProfileService {
@@ -29,12 +35,14 @@ impl ProfileService {
         token_repository: Arc<TokenRepository>,
         rust_monorepo_service: Arc<RustMonorepoService>,
         birdeye_service: Arc<BirdeyeService>,
+        redis_service: Arc<RedisService>,
     ) -> Self {
         ProfileService {
             user_repository,
             token_repository,
             rust_monorepo_service,
             birdeye_service,
+            redis_service,
         }
     }
 
@@ -57,6 +65,17 @@ impl ProfileService {
         username: &str,
         params: &ProfilePicksAndStatsQuery,
     ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
+        let cache_key = format!("user_picks_stats:{}", username);
+        debug!("Checking cache for key: {}", cache_key);
+        if let Ok(Some(cached)) = self
+            .redis_service
+            .get_cached::<(Vec<TokenPickResponse>, UserStats)>(&cache_key)
+            .await
+        {
+            info!("Cache hit for user picks and stats for {}", username);
+            return Ok(cached);
+        }
+        debug!("Cache miss for key: {}", cache_key);
         info!("Getting user picks and stats for {}", username);
 
         let user = self
@@ -78,10 +97,31 @@ impl ProfileService {
         info!("Found {} picks for user {}", picks.len(), username);
 
         let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
-        let latest_prices = self
+        let latest_prices_future = self
             .rust_monorepo_service
-            .get_latest_w_metadata(token_addresses)
-            .await?;
+            .get_latest_w_metadata(token_addresses);
+
+        let ohlcv_futures = picks.iter().map(|pick| {
+            let birdeye_service = self.birdeye_service.clone();
+            async move {
+                birdeye_service
+                    .get_ohlcv_request(
+                        &pick.token.chain,
+                        &pick.token.address,
+                        pick.call_date.timestamp(),
+                        Utc::now().timestamp(), // We'll update this with actual price timestamp
+                        "15m",
+                    )
+                    .await
+                    .map(|result| (pick.token.address.clone(), result))
+            }
+        });
+
+        // Execute price and OHLCV requests concurrently
+        let (latest_prices, ohlcv_results) =
+            tokio::join!(latest_prices_future, join_all(ohlcv_futures));
+        let latest_prices = latest_prices?;
+        let ohlcv_map: HashMap<_, _> = ohlcv_results.into_iter().filter_map(Result::ok).collect();
 
         let mut picks_to_update = HashMap::with_capacity(picks.len());
         let mut pick_responses = Vec::with_capacity(picks.len());
@@ -94,20 +134,12 @@ impl ProfileService {
                 .get(&pick.token.address)
                 .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
 
-            let highest_price = self
-                .birdeye_service
-                .get_ohlcv_request(
-                    &pick.token.chain,
-                    &pick.token.address,
-                    pick.call_date.timestamp(),
-                    latest_price.price_fetched_at_unix_time,
-                    "15m",
-                )
-                .await?;
+            let highest_price = ohlcv_map
+                .get(&pick.token.address)
+                .ok_or_else(|| ApiError::InternalServerError("OHLCV data not found".to_string()))?;
 
             let supply = latest_price.metadata.supply.unwrap_or_default();
             let highest_market_cap = highest_price.high * supply;
-            let current_market_cap = latest_price.price * supply;
 
             if highest_market_cap > pick.highest_market_cap.unwrap_or_default() {
                 info!(
@@ -215,7 +247,18 @@ impl ProfileService {
             }
         }
 
-        Ok((pick_responses, stats))
+        let result = (pick_responses, stats);
+
+        // Cache the result
+        if let Err(e) = self
+            .redis_service
+            .set_cached(&cache_key, &result, CACHE_TTL_SECONDS)
+            .await
+        {
+            error!("Failed to cache user picks and stats: {}", e);
+        }
+
+        Ok(result)
     }
 }
 
