@@ -1,35 +1,46 @@
 use crate::{
     models::{
-        profiles::ProfileDetailsResponse, token_picks::TokenPickResponse, tokens::TokenPickRequest,
+        token_picks::TokenPickResponse, tokens::TokenPickRequest,
     },
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    Json,
+};
 use serde::Deserialize;
 use std::sync::Arc;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 const TAG: &str = "token";
+
+#[derive(Deserialize, ToSchema, Debug, IntoParams)]
+pub struct TokenQuery {
+    pub username: String,
+}
 
 #[utoipa::path(
     get,
     tag = TAG,
     path = "/",
     responses(
-        (status = 200, description = "Profile details", body = ProfileDetailsResponse),
+        (status = 200, description = "Token picks", body = TokenPickResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     ),
-    params((
-        "username" = String,
-        Query,
-        description = "Username"
-    ))
+    params(TokenQuery)
 )]
 pub(super) async fn get_token_picks(
     State(app_state): State<Arc<AppState>>,
-) -> Result<(StatusCode, Json<TokenPickResponse>), ApiError> {
-    Err(ApiError::UserNotFound)
+    Query(query): Query<TokenQuery>,
+) -> Result<(StatusCode, Json<Vec<TokenPickResponse>>), ApiError> {
+    let picks = app_state.token_service.list_token_picks(query).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(picks.into_iter().map(|p| p.into()).collect()),
+    ))
 }
 
 #[derive(Deserialize, ToSchema, Debug)]

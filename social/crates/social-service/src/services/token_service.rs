@@ -4,6 +4,7 @@ use sqlx::types::Json;
 use tracing::{debug, error, info};
 
 use crate::{
+    apis::token_handlers::TokenQuery,
     external_services::rust_monorepo::RustMonorepoService,
     models::{
         token_picks::TokenPick,
@@ -36,6 +37,19 @@ impl TokenService {
             user_service,
             redis_service,
         }
+    }
+
+    pub async fn list_token_picks(&self, query: TokenQuery) -> Result<Vec<TokenPick>, ApiError> {
+        let user = self
+            .user_service
+            .get_user_by_username(&query.username)
+            .await?
+            .ok_or_else(|| ApiError::UserNotFound)?;
+
+        self.token_repository
+            .list_token_picks_by_user_id(user.id, None)
+            .await
+            .map_err(ApiError::from)
     }
 
     pub async fn save_token_pick(&self, pick: TokenPickRequest) -> Result<TokenPick, ApiError> {
