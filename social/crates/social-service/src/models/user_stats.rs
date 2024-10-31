@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UserStats {
     /// Total number of picks
     pub total_picks: i32,
@@ -25,6 +26,7 @@ pub struct UserStats {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct BestPick {
     /// Token symbol.
     pub token_symbol: String,
