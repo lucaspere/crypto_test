@@ -13,14 +13,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if settings.environment == Some("DEV".to_string()) {
         debug!("Running in DEV environment");
     }
-    println!("Port: {:?}", port);
     let app = social_service::setup_router(&settings).await?;
-    println!("App: {:?}", app);
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
-    debug!(
-        "Server running on http://{}",
-        listener.local_addr().unwrap()
-    );
+    debug!("Server running on http://{:?}", listener.local_addr());
 
     if let Err(e) = axum::serve(listener, app).await {
         error!("Server error: {}", e);

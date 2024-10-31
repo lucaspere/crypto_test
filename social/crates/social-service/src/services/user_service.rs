@@ -1,4 +1,4 @@
-use crate::models::users::UserResponse;
+use crate::models::users::{User, UserResponse};
 use crate::repositories::user_repository::UserRepository;
 use crate::utils::api_errors::ApiError;
 use std::sync::Arc;
@@ -17,12 +17,13 @@ impl UserService {
     pub async fn find_by_telegram_user_id(
         &self,
         telegram_user_id: i64,
-    ) -> Result<Option<UserResponse>, sqlx::Error> {
+    ) -> Result<Option<User>, sqlx::Error> {
         let user = self
             .user_repository
             .find_by_telegram_user_id(telegram_user_id)
             .await?;
-        Ok(user.map(UserResponse::from))
+
+        Ok(user)
     }
 
     pub async fn get_user(&self, id: Uuid) -> Result<Option<UserResponse>, sqlx::Error> {

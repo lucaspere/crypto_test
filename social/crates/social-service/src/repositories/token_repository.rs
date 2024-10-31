@@ -70,9 +70,11 @@ impl TokenRepository {
     ) -> Result<Vec<TokenPick>, sqlx::Error> {
         let mut query = r#"
             SELECT tp.*,
-                   row_to_json(t) AS token
+                   row_to_json(t) AS token,
+                   row_to_json(u) AS user
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
+            JOIN public.user u ON tp.user_id = u.id
         "#
         .to_string();
 
@@ -91,9 +93,11 @@ impl TokenRepository {
     pub async fn get_token_pick_by_id(&self, id: i64) -> Result<Option<TokenPick>, sqlx::Error> {
         let query = r#"
             SELECT tp.*,
-                   row_to_json(t) AS token
+                   row_to_json(t) AS token,
+                   row_to_json(u) AS user
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
+            JOIN public.user u ON tp.user_id = u.id
             WHERE tp.id = $1
         "#;
 
@@ -151,7 +155,7 @@ impl TokenRepository {
 			RETURNING id
 		"#;
         let result = sqlx::query_as::<_, From>(query)
-            .bind(pick.user_id)
+            .bind(pick.user.id)
             .bind(pick.group_id)
             .bind(pick.token.address.clone())
             .bind(pick.price_at_call)

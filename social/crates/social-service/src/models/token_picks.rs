@@ -1,10 +1,12 @@
-use super::tokens::Token;
+use super::{
+    tokens::Token,
+    users::{User, UserResponse},
+};
 use chrono::{DateTime, FixedOffset, Utc};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
 use utoipa::{IntoParams, ToSchema};
-use uuid::Uuid;
 
 pub const HIT_MULTIPLIER: u8 = 2;
 
@@ -12,7 +14,7 @@ pub const HIT_MULTIPLIER: u8 = 2;
 pub struct TokenPick {
     pub id: i64,
     pub token: Json<Token>,
-    pub user_id: Uuid,
+    pub user: Json<User>,
     pub group_id: i64,
     pub telegram_message_id: Option<i64>,
     pub price_at_call: Decimal,
@@ -85,7 +87,7 @@ pub struct TokenPickResponse {
     /// The token info
     pub token: Token,
     /// The user ID
-    pub user_id: Uuid,
+    pub user: UserResponse,
     /// The group ID
     pub group_id: i64,
     /// The market cap at the time the pick was made
@@ -119,7 +121,7 @@ impl From<TokenPick> for TokenPickResponse {
             call_date: pick.call_date,
             group_id: pick.group_id,
             id: pick.id,
-            user_id: pick.user_id,
+            user: pick.user.0.into(),
             highest_mc_post_call: pick.highest_market_cap.map(|mc| mc.round_dp(2)),
             hit_date: pick.hit_date,
             market_cap_at_call: pick.market_cap_at_call.round_dp(2),

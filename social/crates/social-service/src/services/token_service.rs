@@ -107,7 +107,7 @@ impl TokenService {
                 error!("Failed to parse telegram chat id: {}", e);
                 ApiError::InternalServerError("Invalid telegram chat id".to_string())
             })?,
-            user_id: user.id,
+            user: Json(user.clone()),
             telegram_message_id: Some(pick.telegram_message_id.parse().map_err(|e| {
                 error!("Failed to parse telegram message id: {}", e);
                 ApiError::InternalServerError("Invalid telegram message id".to_string())

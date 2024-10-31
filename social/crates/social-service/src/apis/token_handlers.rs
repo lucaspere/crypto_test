@@ -17,6 +17,7 @@ const TAG: &str = "token";
 #[derive(Deserialize, ToSchema, Debug, IntoParams)]
 pub struct TokenQuery {
     pub username: Option<String>,
+    pub by_group: Option<i64>,
 }
 
 #[utoipa::path(
