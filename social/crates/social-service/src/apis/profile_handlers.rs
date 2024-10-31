@@ -1,6 +1,5 @@
 use crate::{
     models::{
-        picks::UserPicksResponse,
         profiles::ProfileDetailsResponse,
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         user_stats::UserStats,
@@ -11,7 +10,6 @@ use crate::{
 use axum::{
     extract::{Query, State},
     http::StatusCode,
-    response::IntoResponse,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -51,48 +49,47 @@ pub struct ProfileQuery {
     username: String,
 }
 
-#[utoipa::path(
-    get,
-    tag = TAG,
-    path = "/user-stats",
-    responses(
-        (status = 200, description = "User stats", body = UserStats),
-        (status = 500, description = "Internal server error", body = ErrorResponse)
-    ),
-    params((
-        "username" = String,
-        Query,
-        description = "Username"
-    ))
-)]
-pub(super) async fn get_user_stats(
-    State(app_state): State<Arc<AppState>>,
-    Query(query): Query<ProfileQuery>,
-) -> impl IntoResponse {
-    StatusCode::OK.into_response()
-}
+// #[utoipa::path(
+//     get,
+//     tag = TAG,
+//     path = "/user-stats",
+//     responses(
+//         (status = 200, description = "User stats", body = UserStats),
+//         (status = 500, description = "Internal server error", body = ErrorResponse)
+//     ),
+//     params((
+//         "username" = String,
+//         Query,
+//         description = "Username"
+//     ))
+// )]
+// pub(super) async fn get_user_stats(
+//     State(app_state): State<Arc<AppState>>,
+//     Query(query): Query<ProfileQuery>,
+// ) -> impl IntoResponse {
+//     StatusCode::OK.into_response()
+// }
 
-#[utoipa::path(
-    get,
-    tag = TAG,
-    path = "/user-picks",
-    responses(
-        (status = 200, description = "User picks", body = UserPicksResponse),
-        (status = 500, description = "Internal server error", body = ErrorResponse)
-    ),
-    params((
-        "username" = String,
-        Query,
-        description = "Username"
-    ))
-)]
-pub(super) async fn get_user_picks(
-    State(app_state): State<Arc<AppState>>,
-    Query(username): Query<String>,
-) -> impl IntoResponse {
-    StatusCode::OK.into_response()
-}
-
+// #[utoipa::path(
+//     get,
+//     tag = TAG,
+//     path = "/user-picks",
+//     responses(
+//         (status = 200, description = "User picks", body = UserPicksResponse),
+//         (status = 500, description = "Internal server error", body = ErrorResponse)
+//     ),
+//     params((
+//         "username" = String,
+//         Query,
+//         description = "Username"
+//     ))
+// )]
+// pub(super) async fn get_user_picks(
+//     State(app_state): State<Arc<AppState>>,
+//     Query(username): Query<String>,
+// ) -> impl IntoResponse {
+//     StatusCode::OK.into_response()
+// }
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct ProfilePicksAndStatsResponse {
     picks: Vec<TokenPickResponse>,
@@ -107,15 +104,7 @@ pub struct ProfilePicksAndStatsResponse {
         (status = 200, description = "User picks and stats", body = ProfilePicksAndStatsResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     ),
-    params((
-        "username" = String,
-        Query,
-        description = "Username"
-    ), (
-        "multiplie",
-        Query,
-        description = "Multiplier"
-    ))
+    params(ProfilePicksAndStatsQuery)
 )]
 pub(super) async fn get_profile_picks_and_stats(
     State(app_state): State<Arc<AppState>>,

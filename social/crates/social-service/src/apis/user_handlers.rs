@@ -4,17 +4,26 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
+    Json,
 };
+use serde::Deserialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
 
 const TAG: &str = "user";
 
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FollowUnfollowUserBody {
+    pub follower_id: Uuid,
+}
+
 #[utoipa::path(
     post,
     tag = TAG,
-    path = "/{id}/follow/{follower_id}",
+    path = "/{id}/follow",
     responses(
         (status = 200, description = "User followed successfully"),
         (status = 500, description = "Internal server error")
@@ -22,20 +31,16 @@ const TAG: &str = "user";
     params((
         "id" = Uuid,
         Path,
-        description = "User ID"
-    ), (
-        "follower_id" = Uuid,
-        Path,
-        description = "Follower ID"
     ))
 )]
 pub async fn follow_user(
     State(app_state): State<Arc<AppState>>,
-    Path((user_id, follower_id)): Path<(Uuid, Uuid)>,
+    Path(user_id): Path<Uuid>,
+    Json(body): Json<FollowUnfollowUserBody>,
 ) -> impl IntoResponse {
     match app_state
         .user_service
-        .follow_user(user_id, follower_id)
+        .follow_user(user_id, body.follower_id)
         .await
     {
         Ok(_) => StatusCode::OK.into_response(),
@@ -45,8 +50,8 @@ pub async fn follow_user(
 
 #[utoipa::path(
     post,
-     tag = TAG,
-    path = "/{id}/unfollow/{follower_id}",
+    tag = TAG,
+    path = "/{id}/unfollow",
     responses(
         (status = 200, description = "User unfollowed successfully"),
         (status = 500, description = "Internal server error")
@@ -54,20 +59,16 @@ pub async fn follow_user(
     params((
         "id" = Uuid,
         Path,
-        description = "User ID"
-    )),
-    params((
-        "follower_id" = Uuid, Path, description = "Follower ID"
     ))
 )]
 pub async fn unfollow_user(
     State(app_state): State<Arc<AppState>>,
     Path(user_id): Path<Uuid>,
-    Path(follower_id): Path<Uuid>,
+    Json(body): Json<FollowUnfollowUserBody>,
 ) -> impl IntoResponse {
     match app_state
         .user_service
-        .unfollow_user(user_id, follower_id)
+        .unfollow_user(user_id, body.follower_id)
         .await
     {
         Ok(_) => StatusCode::OK.into_response(),

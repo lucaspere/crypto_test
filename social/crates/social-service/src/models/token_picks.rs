@@ -3,7 +3,7 @@ use chrono::{DateTime, FixedOffset, Utc};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 pub const HIT_MULTIPLIER: u8 = 2;
@@ -128,7 +128,7 @@ impl From<TokenPick> for TokenPickResponse {
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, IntoParams)]
 pub struct ProfilePicksAndStatsQuery {
     pub username: String,
     pub multiplier: Option<u8>,

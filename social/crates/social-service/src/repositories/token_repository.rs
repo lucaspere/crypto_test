@@ -62,7 +62,7 @@ impl TokenRepository {
     pub async fn list_token_picks_by_user_id(
         &self,
         user_id: Uuid,
-        params: &ProfilePicksAndStatsQuery,
+        params: Option<&ProfilePicksAndStatsQuery>,
     ) -> Result<Vec<TokenPick>, sqlx::Error> {
         let mut query = r#"
             SELECT tp.*,
@@ -73,11 +73,13 @@ impl TokenRepository {
         "#
         .to_string();
 
-        if let Some(multiplier) = params.multiplier {
-            query += &format!(
+        if let Some(params) = params {
+            if let Some(multiplier) = params.multiplier {
+                query += &format!(
                 " AND COALESCE(tp.highest_market_cap / NULLIF(tp.market_cap_at_call, 0), 0) >= {}",
                 multiplier
-            );
+                );
+            }
         }
 
         sqlx::query_as::<_, TokenPick>(query.as_str())

@@ -16,6 +16,9 @@ pub enum ApiError {
 
     #[error("Internal server error: {0}")]
     InternalServerError(String),
+
+    #[error("User already followed")]
+    UserAlreadyFollowed,
 }
 
 impl ApiError {
@@ -25,6 +28,7 @@ impl ApiError {
             ApiError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::RequestError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::UserAlreadyFollowed => StatusCode::CONFLICT,
         }
     }
 }

@@ -86,7 +86,7 @@ impl ProfileService {
 
         let mut picks = self
             .token_repository
-            .list_token_picks_by_user_id(user.id, params)
+            .list_token_picks_by_user_id(user.id, Some(params))
             .await?;
 
         if picks.is_empty() {

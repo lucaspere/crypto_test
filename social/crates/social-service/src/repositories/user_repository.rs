@@ -99,4 +99,18 @@ impl UserRepository {
             .fetch_optional(self.db.as_ref())
             .await
     }
+
+    pub async fn list_followers(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
+        sqlx::query_as::<_, User>(
+            r#"
+        SELECT u.id, u.username, u.telegram_id, u.created_at, u.updated_at
+        FROM user u
+        INNER JOIN social.user_follows uf ON u.id = uf.follower_id
+        WHERE uf.followed_id = $1
+        "#,
+        )
+        .bind(user_id)
+        .fetch_all(self.db.as_ref())
+        .await
+    }
 }

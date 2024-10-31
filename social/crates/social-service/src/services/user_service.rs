@@ -1,5 +1,6 @@
 use crate::models::users::UserResponse;
 use crate::repositories::user_repository::UserRepository;
+use crate::utils::api_errors::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -29,17 +30,24 @@ impl UserService {
         Ok(user.map(UserResponse::from))
     }
 
-    pub async fn follow_user(
+    pub async fn get_user_by_username(
         &self,
-        follower_id: Uuid,
-        followed_id: Uuid,
-    ) -> Result<(), sqlx::Error> {
+        username: &str,
+    ) -> Result<Option<UserResponse>, sqlx::Error> {
+        let user = self.user_repository.find_by_username(username).await?;
+        Ok(user.map(UserResponse::from))
+    }
+
+    pub async fn follow_user(&self, follower_id: Uuid, followed_id: Uuid) -> Result<(), ApiError> {
+        let follower_user = self.list_followers(follower_id).await?;
+        let already_following = follower_user.iter().any(|user| user.id == followed_id);
+        if already_following {
+            return Err(ApiError::UserAlreadyFollowed);
+        }
+
         self.user_repository
             .follow_user(follower_id, followed_id)
             .await?;
-
-        let followed_user = self.get_user(followed_id).await?.unwrap();
-        let follower_user = self.get_user(follower_id).await?.unwrap();
 
         Ok(())
     }
@@ -52,5 +60,10 @@ impl UserService {
         self.user_repository
             .unfollow_user(follower_id, followed_id)
             .await
+    }
+
+    pub async fn list_followers(&self, user_id: Uuid) -> Result<Vec<UserResponse>, sqlx::Error> {
+        let followers = self.user_repository.list_followers(user_id).await?;
+        Ok(followers.into_iter().map(UserResponse::from).collect())
     }
 }
