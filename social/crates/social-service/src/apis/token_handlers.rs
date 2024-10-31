@@ -1,7 +1,5 @@
 use crate::{
-    models::{
-        token_picks::TokenPickResponse, tokens::TokenPickRequest,
-    },
+    models::{token_picks::TokenPickResponse, tokens::TokenPickRequest},
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
@@ -18,7 +16,7 @@ const TAG: &str = "token";
 
 #[derive(Deserialize, ToSchema, Debug, IntoParams)]
 pub struct TokenQuery {
-    pub username: String,
+    pub username: Option<String>,
 }
 
 #[utoipa::path(
