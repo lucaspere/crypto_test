@@ -14,7 +14,7 @@ use utoipa::{IntoParams, ToSchema};
 
 const TAG: &str = "token";
 
-#[derive(Deserialize, ToSchema, Debug, IntoParams)]
+#[derive(Deserialize, ToSchema, Debug, IntoParams, Default)]
 pub struct TokenQuery {
     pub username: Option<String>,
     pub by_group: Option<i64>,

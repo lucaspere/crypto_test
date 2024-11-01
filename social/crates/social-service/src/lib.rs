@@ -23,7 +23,7 @@ pub mod utils;
 pub struct AppState {
     pub user_service: UserService,
     pub profile_service: ProfileService,
-    pub token_service: TokenService,
+    pub token_service: Arc<TokenService>,
 }
 
 pub async fn setup_database(database_url: &str) -> Result<Arc<PgPool>, sqlx::Error> {
@@ -50,27 +50,29 @@ pub async fn setup_router(
 pub async fn setup_services(
     db: Arc<PgPool>,
     settings: &settings::Settings,
-) -> Result<(UserService, ProfileService, TokenService), Box<dyn std::error::Error>> {
+) -> Result<(UserService, ProfileService, Arc<TokenService>), Box<dyn std::error::Error>> {
     let user_repository = Arc::new(UserRepository::new(db.clone()));
     let token_repository = Arc::new(TokenRepository::new(db.clone()));
     let redis_service = Arc::new(RedisService::new(&settings.redis_url).await?);
     let user_service = UserService::new(user_repository.clone());
     let birdeye_service = Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone()));
     let rust_monorepo = Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
+    let token_service = TokenService::new(
+        token_repository.clone(),
+        rust_monorepo.clone(),
+        Arc::new(user_service.clone()),
+        redis_service.clone(),
+        birdeye_service.clone(),
+    );
+    let token_service = Arc::new(token_service);
     let profile_service = ProfileService::new(
         user_repository,
         token_repository.clone(),
         rust_monorepo.clone(),
         birdeye_service,
         redis_service.clone(),
+        token_service.clone(),
     );
-    let token_service = TokenService::new(
-        token_repository,
-        rust_monorepo,
-        Arc::new(user_service.clone()),
-        redis_service,
-    );
-
     Ok((user_service, profile_service, token_service))
 }
 

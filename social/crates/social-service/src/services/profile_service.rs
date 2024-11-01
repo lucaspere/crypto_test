@@ -6,20 +6,18 @@ use rust_decimal::Decimal;
 use tracing::{debug, error, info};
 
 use crate::{
+    apis::token_handlers::TokenQuery,
     external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         user_stats::{BestPick, UserStats},
     },
-    repositories::{
-        token_repository::{ListTokenPicksParams, TokenRepository},
-        user_repository::UserRepository,
-    },
+    repositories::{token_repository::TokenRepository, user_repository::UserRepository},
     utils::api_errors::ApiError,
 };
 
-use super::redis_service::RedisService;
+use super::{redis_service::RedisService, token_service::TokenService};
 
 const CACHE_TTL_SECONDS: u64 = 300; // 5
 
@@ -30,6 +28,7 @@ pub struct ProfileService {
     rust_monorepo_service: Arc<RustMonorepoService>,
     birdeye_service: Arc<BirdeyeService>,
     redis_service: Arc<RedisService>,
+    token_service: Arc<TokenService>,
 }
 
 impl ProfileService {
@@ -39,6 +38,7 @@ impl ProfileService {
         rust_monorepo_service: Arc<RustMonorepoService>,
         birdeye_service: Arc<BirdeyeService>,
         redis_service: Arc<RedisService>,
+        token_service: Arc<TokenService>,
     ) -> Self {
         ProfileService {
             user_repository,
@@ -46,6 +46,7 @@ impl ProfileService {
             rust_monorepo_service,
             birdeye_service,
             redis_service,
+            token_service,
         }
     }
 
@@ -83,20 +84,12 @@ impl ProfileService {
         debug!("Cache miss for key: {}", cache_key);
         info!("Getting user picks and stats for {}", params.username);
 
-        let user = self
-            .user_repository
-            .find_by_username(&params.username)
-            .await?
-            .ok_or(ApiError::UserNotFound)?;
-
-        let paramsx = ListTokenPicksParams {
-            user_id: Some(user.id),
+        let paramsx = TokenQuery {
+            username: Some(params.username.clone()),
+            ..Default::default()
         };
 
-        let mut picks = self
-            .token_repository
-            .list_token_picks(Some(&paramsx))
-            .await?;
+        let mut picks = self.token_service.list_token_picks(paramsx).await?;
 
         if picks.is_empty() {
             info!("No picks found for user {}", params.username);
@@ -105,89 +98,29 @@ impl ProfileService {
 
         info!("Found {} picks for user {}", picks.len(), params.username);
 
-        let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
-        let latest_prices_future = self
-            .rust_monorepo_service
-            .get_latest_w_metadata(token_addresses);
-
-        let ohlcv_futures = picks.iter().map(|pick| {
-            let birdeye_service = self.birdeye_service.clone();
-            async move {
-                birdeye_service
-                    .get_ohlcv_request(
-                        &pick.token.chain,
-                        &pick.token.address,
-                        pick.call_date.timestamp(),
-                        Utc::now().timestamp(), // We'll update this with actual price timestamp
-                        "15m",
-                    )
-                    .await
-                    .map(|result| (pick.token.address.clone(), result))
-            }
-        });
-
-        // Execute price and OHLCV requests concurrently
-        let (latest_prices, ohlcv_results) =
-            tokio::join!(latest_prices_future, join_all(ohlcv_futures));
-        let latest_prices = latest_prices?;
-        let ohlcv_map: HashMap<_, _> = ohlcv_results.into_iter().filter_map(Result::ok).collect();
-
-        let mut picks_to_update = HashMap::with_capacity(picks.len());
-        let mut pick_responses = Vec::with_capacity(picks.len());
         let mut total_returns = Decimal::ZERO;
         let mut best_pick = None::<BestPick>;
         let mut hits_2x = 0;
 
         for pick in &mut picks {
-            let latest_price = latest_prices
-                .get(&pick.token.address)
-                .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
-
-            let highest_price = ohlcv_map
-                .get(&pick.token.address)
-                .ok_or_else(|| ApiError::InternalServerError("OHLCV data not found".to_string()))?;
-
-            let supply = latest_price.metadata.supply.unwrap_or_default();
-            let highest_market_cap = highest_price.high * supply;
-
-            if highest_market_cap > pick.highest_market_cap.unwrap_or_default() {
-                info!(
-                    "New highest market cap for token {}: {}",
-                    pick.token.symbol, highest_market_cap
-                );
-                pick.highest_market_cap = Some(highest_market_cap);
-                picks_to_update.insert(pick.id, pick.clone());
-            }
-
             // Check and update 2x hit status
             let hit_2x = calculate_return(
                 &pick.market_cap_at_call,
-                &pick.highest_market_cap.unwrap_or_default(),
+                &pick.highest_mc_post_call.unwrap_or_default(),
             ) >= Decimal::from(2);
             if hit_2x {
                 hits_2x += 1;
                 if pick.hit_date.is_none() {
                     info!("Token {} hit 2x", pick.token.symbol);
                     pick.hit_date = Some(Utc::now().into());
-                    picks_to_update.insert(pick.id, pick.clone());
                 }
             }
 
-            // Create pick response and update stats
-            let mut pick_response = TokenPickResponse::from(pick.clone());
-            pick_response.current_market_cap =
-                latest_price.metadata.mc.unwrap_or_default().round_dp(2);
-            pick_response.current_multiplier = calculate_return(
-                &pick_response.market_cap_at_call,
-                &pick_response.current_market_cap,
-            )
-            .round_dp(2)
-            .to_string()
-            .parse::<f32>()
-            .unwrap_or_default();
-
             // Update best pick and total returns
-            let current_return = calculate_return(&pick.market_cap_at_call, &highest_market_cap);
+            let current_return = calculate_return(
+                &pick.market_cap_at_call,
+                &pick.highest_mc_post_call.unwrap_or_default(),
+            );
             total_returns += current_return;
 
             let new_best = BestPick {
@@ -201,15 +134,10 @@ impl ProfileService {
                 None => Some(new_best),
                 b => b,
             };
-
-            pick_responses.push(pick_response);
         }
 
-        let total_picks = pick_responses.len() as i32;
-        let total_hits = pick_responses
-            .iter()
-            .filter(|p| p.hit_date.is_some())
-            .count() as i32;
+        let total_picks = picks.len() as i32;
+        let total_hits = picks.iter().filter(|p| p.hit_date.is_some()).count() as i32;
 
         let hit_rate = if total_picks > 0 {
             Decimal::from(hits_2x * 100) / Decimal::from(total_picks)
@@ -244,19 +172,7 @@ impl ProfileService {
             total_picks - total_hits
         );
 
-        // Update picks in database if needed
-        if !picks_to_update.is_empty() {
-            info!("Updating {} token picks", picks_to_update.len());
-            if let Err(e) = self
-                .token_repository
-                .update_token_picks(picks_to_update.values().cloned().collect())
-                .await
-            {
-                error!("Failed to update token picks: {}", e);
-            }
-        }
-
-        let result = (pick_responses, stats);
+        let result = (picks, stats);
 
         // Cache the result
         if let Err(e) = self
