@@ -12,7 +12,6 @@ use crate::{
     models::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Token, TokenPickRequest},
-        user_stats::BestPick,
     },
     repositories::token_repository::{ListTokenPicksParams, TokenRepository},
     services::user_service::UserService,
@@ -50,7 +49,10 @@ impl TokenService {
         &self,
         query: TokenQuery,
     ) -> Result<Vec<TokenPickResponse>, ApiError> {
+        debug!("Listing token picks with query: {:?}", query);
+
         let user = if let Some(username) = query.username {
+            debug!("Looking up user by username: {}", username);
             self.user_service.get_user_by_username(&username).await?
         } else {
             None
@@ -72,8 +74,7 @@ impl TokenService {
             return Ok(cached);
         }
 
-        debug!("Listing token picks with params: {:?}", params);
-
+        debug!("Cache miss, fetching token picks from database");
         let mut picks = self
             .token_repository
             .list_token_picks(Some(&params))
@@ -81,6 +82,11 @@ impl TokenService {
             .map_err(ApiError::from)?;
 
         let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
+        debug!(
+            "Fetching latest prices for {} tokens",
+            token_addresses.len()
+        );
+
         let latest_prices_future = self
             .rust_monorepo_service
             .get_latest_w_metadata(token_addresses);
@@ -93,7 +99,7 @@ impl TokenService {
                         &pick.token.chain,
                         &pick.token.address,
                         pick.call_date.timestamp(),
-                        Utc::now().timestamp(), // We'll update this with actual price timestamp
+                        Utc::now().timestamp(),
                         "15m",
                     )
                     .await
@@ -101,14 +107,16 @@ impl TokenService {
             }
         });
 
-        // Execute price and OHLCV requests concurrently
+        debug!("Fetching latest prices and OHLCV data concurrently");
         let (latest_prices, ohlcv_results) =
             tokio::join!(latest_prices_future, join_all(ohlcv_futures));
         let latest_prices = latest_prices?;
         let ohlcv_map: HashMap<_, _> = ohlcv_results.into_iter().filter_map(Result::ok).collect();
+
         let mut picks_to_update = HashMap::with_capacity(picks.len());
         let mut pick_responses = Vec::with_capacity(picks.len());
 
+        debug!("Processing {} picks", picks.len());
         for pick in &mut picks {
             let latest_price = latest_prices
                 .get(&pick.token.address)
@@ -130,8 +138,8 @@ impl TokenService {
                 picks_to_update.insert(pick.id, pick.clone());
             }
 
-            // Create pick response and update stats
             let mut pick_response = TokenPickResponse::from(pick.clone());
+            pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
             pick_response.current_market_cap =
                 latest_price.metadata.mc.unwrap_or_default().round_dp(2);
             pick_response.current_multiplier = calculate_return(
@@ -143,21 +151,23 @@ impl TokenService {
             .parse::<f32>()
             .unwrap_or_default();
 
-            // Update best pick and total returns
             pick_responses.push(pick_response);
         }
 
-        debug!("Cache miss for key: {}", cache_key);
-        self.redis_service
+        debug!("Caching {} pick responses", pick_responses.len());
+        if let Err(e) = self
+            .redis_service
             .set_cached(&cache_key, &pick_responses, 300)
             .await
-            .map_err(|e| {
-                error!("Failed to cache token picks: {}", e);
-                ApiError::InternalServerError("Failed to cache token picks".to_string())
-            })?;
+        {
+            error!("Failed to cache token picks: {}", e);
+        }
 
         if !picks_to_update.is_empty() {
-            info!("Updating {} token picks", picks_to_update.len());
+            info!(
+                "Updating {} token picks with new market caps",
+                picks_to_update.len()
+            );
             if let Err(e) = self
                 .token_repository
                 .update_token_picks(picks_to_update.values().cloned().collect())
@@ -166,6 +176,8 @@ impl TokenService {
                 error!("Failed to update token picks: {}", e);
             }
         }
+
+        debug!("Successfully processed all token picks");
         Ok(pick_responses)
     }
 
