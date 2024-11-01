@@ -1,9 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use chrono::Utc;
-use futures::future::join_all;
 use rust_decimal::Decimal;
-use tracing::{debug, error, info};
+use tracing::info;
 
 use crate::{
     apis::token_handlers::TokenQuery,
@@ -71,17 +70,6 @@ impl ProfileService {
         &self,
         params: &ProfilePicksAndStatsQuery,
     ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
-        let cache_key = format!("user_picks_stats:{}", params.username);
-        debug!("Checking cache for key: {}", cache_key);
-        if let Ok(Some(cached)) = self
-            .redis_service
-            .get_cached::<(Vec<TokenPickResponse>, UserStats)>(&cache_key)
-            .await
-        {
-            info!("Cache hit for user picks and stats for {}", params.username);
-            return Ok(cached);
-        }
-        debug!("Cache miss for key: {}", cache_key);
         info!("Getting user picks and stats for {}", params.username);
 
         let paramsx = TokenQuery {
@@ -173,15 +161,6 @@ impl ProfileService {
         );
 
         let result = (picks, stats);
-
-        // Cache the result
-        if let Err(e) = self
-            .redis_service
-            .set_cached(&cache_key, &result, CACHE_TTL_SECONDS)
-            .await
-        {
-            error!("Failed to cache user picks and stats: {}", e);
-        }
 
         Ok(result)
     }

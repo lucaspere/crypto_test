@@ -104,6 +104,8 @@ pub struct TokenPickResponse {
     pub highest_mult_post_call: f32,
     /// Date the pick hit
     pub hit_date: Option<DateTime<FixedOffset>>,
+    /// The logo URI
+    pub logo_uri: Option<String>,
 }
 
 impl From<TokenPick> for TokenPickResponse {

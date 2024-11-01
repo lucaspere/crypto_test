@@ -116,8 +116,6 @@ impl TokenRepository {
 		"#
         .to_string();
 
-        let mut tx = self.db.begin().await?;
-
         for pick in picks {
             let highest_market_cap = pick.highest_market_cap.unwrap_or_default();
             let rounded_market_cap = highest_market_cap.round_dp(8);
@@ -126,25 +124,21 @@ impl TokenRepository {
                 .bind(rounded_market_cap)
                 .bind(pick.hit_date)
                 .bind(pick.id)
-                .execute(tx.as_mut())
+                .execute(self.db.as_ref())
                 .await
                 .map_err(|e| {
-                    println!("{:?}", rounded_market_cap);
-                    println!("{:#?}", pick);
                     error!("Failed to update token pick: {}", e);
                     e
                 })?;
 
             if result.rows_affected() != 1 {
                 error!("Failed to update token pick: {}", result.rows_affected());
-                tx.rollback().await?;
                 return Err(ApiError::InternalServerError(
                     "Failed to update token pick".to_string(),
                 ));
             }
         }
 
-        tx.commit().await?;
         Ok(())
     }
 
