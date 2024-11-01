@@ -2,6 +2,7 @@ use crate::models::tiers::TiersType;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use super::user_stats::UserStats;
 
@@ -49,6 +50,8 @@ pub struct ProfileTier {
 #[derive(Deserialize, Serialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileDetailsResponse {
+    /// User's ID
+    pub id: Uuid,
     /// Bullpen username
     pub username: String,
     /// User's name

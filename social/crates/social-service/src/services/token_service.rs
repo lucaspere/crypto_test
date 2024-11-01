@@ -48,7 +48,7 @@ impl TokenService {
     pub async fn list_token_picks(
         &self,
         query: TokenQuery,
-    ) -> Result<Vec<TokenPickResponse>, ApiError> {
+    ) -> Result<(Vec<TokenPickResponse>, i64), ApiError> {
         debug!("Listing token picks with query: {:?}", query);
 
         let user = if let Some(username) = query.username {
@@ -60,14 +60,22 @@ impl TokenService {
 
         let params = ListTokenPicksParams {
             user_id: user.map(|u| u.id),
+            page: query.page,
+            limit: query.limit,
+            order_by: query.order_by,
+            order_direction: query.order_direction,
+            get_all: query.get_all.unwrap_or(false),
         };
 
-        let cache_key = format!("token_picks:{:?}", params);
+        let cache_key = format!(
+            "token_picks:user_id={:?}:page={}:limit={}:order_by={:?}:direction={:?}",
+            params.user_id, params.page, params.limit, params.order_by, params.order_direction
+        );
         debug!("Checking cache for key: {}", cache_key);
 
         if let Ok(Some(cached)) = self
             .redis_service
-            .get_cached::<Vec<TokenPickResponse>>(&cache_key)
+            .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
             .await
         {
             info!("Cache hit for token picks");
@@ -75,7 +83,7 @@ impl TokenService {
         }
 
         debug!("Cache miss, fetching token picks from database");
-        let mut picks = self
+        let (mut picks, total) = self
             .token_repository
             .list_token_picks(Some(&params))
             .await
@@ -155,9 +163,10 @@ impl TokenService {
         }
 
         debug!("Caching {} pick responses", pick_responses.len());
+        let response = (pick_responses.clone(), total);
         if let Err(e) = self
             .redis_service
-            .set_cached(&cache_key, &pick_responses, 300)
+            .set_cached(&cache_key, &response, 300)
             .await
         {
             error!("Failed to cache token picks: {}", e);
@@ -178,7 +187,7 @@ impl TokenService {
         }
 
         debug!("Successfully processed all token picks");
-        Ok(pick_responses)
+        Ok((pick_responses, total))
     }
 
     pub async fn save_token_pick(&self, pick: TokenPickRequest) -> Result<TokenPick, ApiError> {
