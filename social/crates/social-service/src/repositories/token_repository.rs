@@ -25,6 +25,11 @@ impl TokenRepository {
 #[derive(Debug, sqlx::FromRow)]
 pub struct ListTokenPicksParams {
     pub user_id: Option<Uuid>,
+    pub page: u32,
+    pub limit: u32,
+    pub order_by: Option<String>,
+    pub order_direction: Option<String>,
+    pub get_all: bool,
 }
 
 impl TokenRepository {
@@ -67,8 +72,8 @@ impl TokenRepository {
     pub async fn list_token_picks(
         &self,
         params: Option<&ListTokenPicksParams>,
-    ) -> Result<Vec<TokenPick>, sqlx::Error> {
-        let mut query = r#"
+    ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
+        let mut base_query = r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user
@@ -78,16 +83,57 @@ impl TokenRepository {
         "#
         .to_string();
 
-        let mut query_builder = sqlx::query_as::<_, TokenPick>(&query);
-
+        let mut where_clause = String::new();
         if let Some(params) = params {
             if let Some(user_id) = params.user_id {
-                query += " WHERE tp.user_id = $1";
-                query_builder = sqlx::query_as(&query).bind(user_id);
+                where_clause = " WHERE tp.user_id = $1".to_string();
             }
         }
 
-        query_builder.fetch_all(self.db.as_ref()).await
+        base_query += &where_clause;
+
+        // Count query
+        let count_query = format!("SELECT COUNT(*) FROM ({}) AS filtered", base_query);
+
+        // Add ordering and pagination to main query
+        if let Some(params) = params {
+            if let Some(order_by) = &params.order_by {
+                let direction = params.order_direction.as_deref().unwrap_or("ASC");
+                base_query += &format!(" ORDER BY {} {}", order_by, direction);
+            } else {
+                base_query += " ORDER BY call_date DESC";
+            }
+
+            // Only apply pagination if get_all is false
+            if !params.get_all {
+                let offset = (params.page - 1) * params.limit;
+                base_query += &format!(" LIMIT {} OFFSET {}", params.limit, offset);
+            }
+        }
+
+        let mut tx = self.db.begin().await?;
+
+        // Execute count query
+        let mut count_builder = sqlx::query_scalar(&count_query);
+        if let Some(params) = params {
+            if let Some(user_id) = params.user_id {
+                count_builder = count_builder.bind(user_id);
+            }
+        }
+        let total: i64 = count_builder.fetch_one(&mut *tx).await?;
+
+        // Execute main query
+        let mut query_builder = sqlx::query_as::<_, TokenPick>(&base_query);
+        if let Some(params) = params {
+            if let Some(user_id) = params.user_id {
+                query_builder = query_builder.bind(user_id);
+            }
+        }
+
+        let picks = query_builder.fetch_all(&mut *tx).await?;
+        tx.commit().await?;
+
+        Ok((picks, total))
     }
 
     pub async fn get_token_pick_by_id(&self, id: i64) -> Result<Option<TokenPick>, sqlx::Error> {
@@ -116,6 +162,8 @@ impl TokenRepository {
 		"#
         .to_string();
 
+        let mut tx = self.db.begin().await?;
+
         for pick in picks {
             let highest_market_cap = pick.highest_market_cap.unwrap_or_default();
             let rounded_market_cap = highest_market_cap.round_dp(8);
@@ -124,7 +172,7 @@ impl TokenRepository {
                 .bind(rounded_market_cap)
                 .bind(pick.hit_date)
                 .bind(pick.id)
-                .execute(self.db.as_ref())
+                .execute(tx.as_mut())
                 .await
                 .map_err(|e| {
                     error!("Failed to update token pick: {}", e);
@@ -133,12 +181,14 @@ impl TokenRepository {
 
             if result.rows_affected() != 1 {
                 error!("Failed to update token pick: {}", result.rows_affected());
+                tx.rollback().await?;
                 return Err(ApiError::InternalServerError(
                     "Failed to update token pick".to_string(),
                 ));
             }
         }
 
+        tx.commit().await?;
         Ok(())
     }
 

@@ -50,6 +50,11 @@ impl ProfileService {
     }
 
     pub async fn get_profile(&self, username: &str) -> Result<ProfileDetailsResponse, ApiError> {
+        let user = self
+            .user_repository
+            .find_by_username(username)
+            .await?
+            .ok_or(ApiError::UserNotFound)?;
         let (_, stats) = self
             .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
                 username: username.to_string(),
@@ -57,6 +62,7 @@ impl ProfileService {
             })
             .await?;
         let response = ProfileDetailsResponse {
+            id: user.id,
             username: username.to_string(),
             name: username.to_string(),
             avatar_url: String::new(),
@@ -74,10 +80,11 @@ impl ProfileService {
 
         let paramsx = TokenQuery {
             username: Some(params.username.clone()),
+            get_all: Some(true),
             ..Default::default()
         };
 
-        let mut picks = self.token_service.list_token_picks(paramsx).await?;
+        let (mut picks, _) = self.token_service.list_token_picks(paramsx).await?;
 
         if picks.is_empty() {
             info!("No picks found for user {}", params.username);
