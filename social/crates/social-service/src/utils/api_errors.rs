@@ -8,6 +8,9 @@ pub enum ApiError {
     #[error("User not found")]
     UserNotFound,
 
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+
     #[error("Request error: {0}")]
     RequestError(#[from] reqwest::Error),
 
@@ -29,6 +32,7 @@ impl ApiError {
             ApiError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::RequestError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::UserAlreadyFollowed => StatusCode::CONFLICT,
+            ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

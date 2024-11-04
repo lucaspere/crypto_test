@@ -1,18 +1,27 @@
 use std::sync::Arc;
 
+use uuid::Uuid;
+
 use crate::{
-    repositories::group_repository::{Group, GroupRepository, GroupUser},
+    apis::group_handlers::AddUserRequest,
+    models::groups::{CreateOrUpdateGroup, Group, GroupUser},
+    repositories::group_repository::GroupRepository,
     utils::api_errors::ApiError,
 };
-use uuid::Uuid;
+
+use super::user_service::UserService;
 
 pub struct GroupService {
     repository: Arc<GroupRepository>,
+    user_service: Arc<UserService>,
 }
 
 impl GroupService {
-    pub fn new(repository: Arc<GroupRepository>) -> Self {
-        Self { repository }
+    pub fn new(repository: Arc<GroupRepository>, user_service: Arc<UserService>) -> Self {
+        Self {
+            repository,
+            user_service,
+        }
     }
 
     pub async fn create_or_update_group(
@@ -20,22 +29,61 @@ impl GroupService {
         id: i64,
         name: &str,
         logo_uri: &Option<String>,
-    ) -> Result<Group, sqlx::Error> {
-        self.repository.upsert_group(id, name, logo_uri).await
+    ) -> Result<CreateOrUpdateGroup, ApiError> {
+        self.repository
+            .upsert_group(id, name, logo_uri)
+            .await
+            .map_err(|e| ApiError::DatabaseError(e))
     }
 
     pub async fn get_group(&self, id: i64) -> Result<Option<Group>, ApiError> {
         self.repository
             .get_group(id)
             .await
-            .map_err(|_| ApiError::InternalServerError(String::from("Failed to get group")))
+            .map_err(|e| ApiError::DatabaseError(e))
     }
 
     pub async fn add_user_to_group(
         &self,
         group_id: i64,
+        payload: &AddUserRequest,
+    ) -> Result<GroupUser, ApiError> {
+        let user_id = match (payload.user_id, &payload.telegram_id) {
+            (Some(id), _) => id,
+            (None, Some(telegram_id)) => {
+                let user = self
+                    .user_service
+                    .get_by_telegram_user_id(*telegram_id)
+                    .await?;
+                user.unwrap().id
+            }
+            (None, None) => {
+                return Err(ApiError::BadRequest(
+                    "Either user_id or telegram_id must be provided".to_string(),
+                ))
+            }
+        };
+
+        self.repository
+            .add_user_to_group(group_id, user_id)
+            .await
+            .map_err(|e| ApiError::DatabaseError(e))
+    }
+
+    pub async fn remove_user_from_group(
+        &self,
+        group_id: i64,
         user_id: Uuid,
-    ) -> Result<GroupUser, sqlx::Error> {
-        self.repository.add_user_to_group(group_id, user_id).await
+    ) -> Result<GroupUser, ApiError> {
+        let group_user = self.repository.get_group_user(group_id, user_id).await?;
+
+        if let Some(group_user) = group_user {
+            self.repository
+                .remove_user_from_group(group_id, user_id)
+                .await?;
+            Ok(group_user)
+        } else {
+            Err(ApiError::UserNotFound)
+        }
     }
 }
