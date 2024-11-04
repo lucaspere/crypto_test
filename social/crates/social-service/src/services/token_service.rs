@@ -53,7 +53,7 @@ impl TokenService {
 
         let user = if let Some(username) = query.username {
             debug!("Looking up user by username: {}", username);
-            self.user_service.get_user_by_username(&username).await?
+            self.user_service.get_by_username(&username).await?
         } else {
             None
         };
@@ -198,7 +198,7 @@ impl TokenService {
 
         let user = self
             .user_service
-            .find_by_telegram_user_id(pick.telegram_user_id.parse().map_err(|e| {
+            .get_by_telegram_user_id(pick.telegram_user_id.parse().map_err(|e| {
                 error!("Failed to parse telegram user id: {}", e);
                 ApiError::InternalServerError("Invalid telegram user id".to_string())
             })?)

@@ -14,7 +14,7 @@ impl UserService {
         Self { user_repository }
     }
 
-    pub async fn find_by_telegram_user_id(
+    pub async fn get_by_telegram_user_id(
         &self,
         telegram_user_id: i64,
     ) -> Result<Option<User>, sqlx::Error> {
@@ -26,12 +26,12 @@ impl UserService {
         Ok(user)
     }
 
-    pub async fn get_user(&self, id: Uuid) -> Result<Option<UserResponse>, sqlx::Error> {
+    pub async fn get_by_id(&self, id: Uuid) -> Result<Option<UserResponse>, sqlx::Error> {
         let user = self.user_repository.find_by_id(id).await?;
         Ok(user.map(UserResponse::from))
     }
 
-    pub async fn get_user_by_username(
+    pub async fn get_by_username(
         &self,
         username: &str,
     ) -> Result<Option<UserResponse>, sqlx::Error> {

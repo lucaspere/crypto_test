@@ -2,23 +2,10 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::models::groups::{CreateOrUpdateGroup, Group, GroupUser};
+
 pub struct GroupRepository {
     db: Arc<PgPool>,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct Group {
-    pub id: i64,
-    pub name: String,
-    pub logo_uri: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct GroupUser {
-    pub group_id: i64,
-    pub user_id: Uuid,
-    pub joined_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl GroupRepository {
@@ -31,13 +18,13 @@ impl GroupRepository {
         id: i64,
         name: &str,
         logo_uri: &Option<String>,
-    ) -> Result<Group, sqlx::Error> {
-        sqlx::query_as::<_, Group>(
+    ) -> Result<CreateOrUpdateGroup, sqlx::Error> {
+        sqlx::query_as::<_, CreateOrUpdateGroup>(
             r#"
             INSERT INTO social.groups (id, name, logo_uri)
             VALUES ($1, $2, $3)
-            ON CONFLICT (name) DO UPDATE
-            SET name = EXCLUDED.name
+            ON CONFLICT (id) DO UPDATE
+            SET name = EXCLUDED.name, logo_uri = EXCLUDED.logo_uri
             RETURNING id, name, logo_uri, created_at
             "#,
         )
@@ -51,9 +38,31 @@ impl GroupRepository {
     pub async fn get_group(&self, id: i64) -> Result<Option<Group>, sqlx::Error> {
         sqlx::query_as::<_, Group>(
             r#"
-            SELECT id, name, logo_uri, created_at
-            FROM social.groups
-            WHERE id = $1
+            SELECT
+                g.id,
+                g.name,
+                g.logo_uri,
+                g.created_at,
+                COALESCE(tp_count.count, 0) as token_pick_count,
+                COALESCE(gu_count.count, 0) as user_count,
+                COALESCE(tp_hit_rate.hit_rate, 0) as hit_rate
+            FROM social.groups g
+            LEFT JOIN (
+                SELECT group_id, COUNT(*) as count
+                FROM social.token_picks
+                GROUP BY group_id
+            ) tp_count ON g.id = tp_count.group_id
+            LEFT JOIN (
+                SELECT group_id, COUNT(DISTINCT user_id) as count
+                FROM social.group_users
+                GROUP BY group_id
+            ) gu_count ON g.id = gu_count.group_id
+            LEFT JOIN (
+                SELECT group_id, COUNT(hit_date) as hit_rate
+                FROM social.token_picks
+                GROUP BY group_id
+            ) tp_hit_rate ON g.id = tp_hit_rate.group_id
+            WHERE g.id = $1
             "#,
         )
         .bind(id)
@@ -77,6 +86,34 @@ impl GroupRepository {
         .bind(group_id)
         .bind(user_id)
         .fetch_one(self.db.as_ref())
+        .await
+    }
+
+    pub async fn remove_user_from_group(
+        &self,
+        group_id: i64,
+        user_id: Uuid,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM social.group_users WHERE group_id = $1 AND user_id = $2")
+            .bind(group_id)
+            .bind(user_id)
+            .execute(self.db.as_ref())
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_group_user(
+        &self,
+        group_id: i64,
+        user_id: Uuid,
+    ) -> Result<Option<GroupUser>, sqlx::Error> {
+        sqlx::query_as::<_, GroupUser>(
+            "SELECT * FROM social.group_users WHERE group_id = $1 AND user_id = $2",
+        )
+        .bind(group_id)
+        .bind(user_id)
+        .fetch_optional(self.db.as_ref())
         .await
     }
 }
