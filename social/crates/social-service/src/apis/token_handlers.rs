@@ -12,7 +12,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
-const TAG: &str = "token";
+pub const TAG: &str = "token";
 
 #[derive(serde::Serialize, ToSchema)]
 pub struct PaginatedTokenPickResponse {

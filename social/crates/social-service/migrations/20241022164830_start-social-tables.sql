@@ -5,6 +5,7 @@ CREATE SCHEMA IF NOT EXISTS social;
 CREATE TABLE IF NOT EXISTS social.groups (
     id BIGSERIAL PRIMARY KEY,
     name character varying(255) NOT NULL,
+    logo_uri character varying(255),
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -114,6 +115,8 @@ CREATE INDEX idx_comments_token_pick_id ON social.comments(token_pick_id);
 CREATE INDEX idx_comments_user_id ON social.comments(user_id);
 CREATE INDEX idx_comments_created_at ON social.comments(created_at);
 
+CREATE INDEX idx_group_users_group_id ON social.group_users(group_id);
+CREATE INDEX idx_group_users_user_id ON social.group_users(user_id);
 
 -- migrate:down
 

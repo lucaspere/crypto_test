@@ -7,6 +7,7 @@ use utoipa_scalar::{Scalar, Servable};
 
 use crate::AppState;
 
+pub mod group_handlers;
 pub mod profile_handlers;
 pub mod token_handlers;
 pub mod user_handlers;
@@ -37,6 +38,11 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
         .routes(routes!(user_handlers::unfollow_user))
         .routes(routes!(user_handlers::get_user_followers));
 
+    let group_router = OpenApiRouter::new()
+        .routes(routes!(group_handlers::get_group))
+        .routes(routes!(group_handlers::create_or_update_group))
+        .routes(routes!(group_handlers::add_user_to_group));
+
     let user_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/users", user_router);
 
     let profile_router =
@@ -45,10 +51,13 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let token_router =
         OpenApiRouter::with_openapi(api_doc.clone()).nest("/tokens/picks", token_router);
 
+    let group_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/groups", group_router);
+
     let router = OpenApiRouter::new()
         .merge(user_router)
         .merge(profile_router)
-        .merge(token_router);
+        .merge(token_router)
+        .merge(group_router);
 
     let (api_router, api_openapi) = OpenApiRouter::new()
         .nest("/api/v1", router)

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
-const TAG: &str = "profile";
+pub const TAG: &str = "profile";
 
 #[utoipa::path(
     get,

@@ -85,7 +85,7 @@ impl TokenRepository {
 
         let mut where_clause = String::new();
         if let Some(params) = params {
-            if let Some(user_id) = params.user_id {
+            if let Some(_user_id) = params.user_id {
                 where_clause = " WHERE tp.user_id = $1".to_string();
             }
         }
