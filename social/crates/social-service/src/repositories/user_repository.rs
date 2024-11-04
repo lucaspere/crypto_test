@@ -36,7 +36,7 @@ impl UserRepository {
         followed_id: Uuid,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO social.user_follows (follower_id, followed_id, created_at) VALUES ($1, $2, $3)",
+            "INSERT INTO social.user_follows (follower_id, followed_id, created_at) VALUES ($1, $2, $3)"
         )
         .bind(follower_id)
         .bind(followed_id)
@@ -64,11 +64,11 @@ impl UserRepository {
     pub async fn get_followers(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
         let followers = sqlx::query_as::<_, User>(
             r#"
-        SELECT u.id, u.username, u.telegram_id, u.created_at
-        FROM public.user u
-        INNER JOIN social.user_follows uf ON u.id = uf.follower_id
-        WHERE uf.followed_id = $1
-        "#,
+            SELECT u.id, u.username, u.telegram_id, u.created_at
+            FROM public.user u
+            INNER JOIN social.user_follows uf ON u.id = uf.follower_id
+            WHERE uf.followed_id = $1
+            "#,
         )
         .bind(user_id)
         .fetch_all(self.db.as_ref())
@@ -80,11 +80,11 @@ impl UserRepository {
     pub async fn get_following(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
         let following = sqlx::query_as::<_, User>(
             r#"
-        SELECT u.id, u.username, u.telegram_id, u.created_at
-        FROM public.user u
-        INNER JOIN social.user_follows uf ON u.id = uf.followed_id
-        WHERE uf.follower_id = $1
-        "#,
+            SELECT u.id, u.username, u.telegram_id, u.created_at
+            FROM public.user u
+            INNER JOIN social.user_follows uf ON u.id = uf.followed_id
+            WHERE uf.follower_id = $1
+            "#,
         )
         .bind(user_id)
         .fetch_all(self.db.as_ref())
@@ -103,11 +103,11 @@ impl UserRepository {
     pub async fn list_followers(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
             r#"
-        SELECT u.id, u.username, u.telegram_id, u.created_at
-        FROM public.user u
-        INNER JOIN social.user_follows uf ON u.id = uf.follower_id
-        WHERE uf.followed_id = $1
-        "#,
+            SELECT *
+            FROM public.user u
+            INNER JOIN social.user_follows uf ON u.id = uf.follower_id
+            WHERE uf.followed_id = $1
+            "#,
         )
         .bind(user_id)
         .fetch_all(self.db.as_ref())

@@ -1,5 +1,4 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -11,10 +10,10 @@ pub struct User {
     pub username: String,
     pub telegram_id: i64,
     pub selected_wallet_id: Option<Uuid>,
-    pub accepted_tos: Option<NaiveDateTime>,
+    // pub accepted_tos: Option<DateTime<Utc>>,
     pub waitlisted: bool,
-    pub accepted_insights_risk: Option<NaiveDateTime>,
-    pub created_at: Option<NaiveDateTime>,
+    // pub accepted_insights_risk: Option<DateTime<Utc>>,
+    // pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Clone, Default, Debug)]
