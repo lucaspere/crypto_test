@@ -2,9 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rust_decimal::Decimal;
+use rust_decimal::{
+    prelude::{One, Zero},
+    Decimal,
+};
 use sqlx::types::Json;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     apis::token_handlers::{TokenGroupQuery, TokenQuery},
@@ -143,6 +146,15 @@ impl TokenService {
                 .get(&pick.token.address)
                 .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
 
+            if !TokenPick::is_qualified(
+                latest_price.metadata.mc.unwrap_or_default(),
+                latest_price.metadata.liquidity,
+                latest_price.metadata.v_24h_usd,
+            ) {
+                warn!("Token {} is not qualified", pick.token.symbol);
+                continue;
+            }
+
             let highest_price = ohlcv_map
                 .get(&pick.token.address)
                 .ok_or_else(|| ApiError::InternalServerError("OHLCV data not found".to_string()))?;
@@ -163,14 +175,7 @@ impl TokenService {
             pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
             pick_response.current_market_cap =
                 latest_price.metadata.mc.unwrap_or_default().round_dp(2);
-            pick_response.current_multiplier = calculate_return(
-                &pick_response.market_cap_at_call,
-                &pick_response.current_market_cap,
-            )
-            .round_dp(2)
-            .to_string()
-            .parse::<f32>()
-            .unwrap_or_default();
+            pick_response.current_multiplier = 1.2;
 
             pick_responses.push(pick_response);
         }
@@ -320,5 +325,9 @@ impl TokenService {
 }
 
 fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
-    highest_market_cap / market_cap_at_call
+    if market_cap_at_call.is_zero() || highest_market_cap.is_zero() {
+        Decimal::one()
+    } else {
+        highest_market_cap / market_cap_at_call
+    }
 }
