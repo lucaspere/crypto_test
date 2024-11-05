@@ -22,7 +22,7 @@ impl TokenRepository {
     }
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow, Default)]
 pub struct ListTokenPicksParams {
     pub user_id: Option<Uuid>,
     pub page: u32,
@@ -30,6 +30,7 @@ pub struct ListTokenPicksParams {
     pub order_by: Option<String>,
     pub order_direction: Option<String>,
     pub get_all: bool,
+    pub group_ids: Option<Vec<i64>>,
 }
 
 impl TokenRepository {
@@ -87,6 +88,85 @@ impl TokenRepository {
         if let Some(params) = params {
             if let Some(_user_id) = params.user_id {
                 where_clause = " WHERE tp.user_id = $1".to_string();
+            }
+        }
+
+        base_query += &where_clause;
+
+        // Count query
+        let count_query = format!("SELECT COUNT(*) FROM ({}) AS filtered", base_query);
+
+        // Add ordering and pagination to main query
+        if let Some(params) = params {
+            if let Some(order_by) = &params.order_by {
+                let direction = params.order_direction.as_deref().unwrap_or("ASC");
+                base_query += &format!(" ORDER BY {} {}", order_by, direction);
+            } else {
+                base_query += " ORDER BY call_date DESC";
+            }
+
+            // Only apply pagination if get_all is false
+            if !params.get_all {
+                let offset = (params.page - 1) * params.limit;
+                base_query += &format!(" LIMIT {} OFFSET {}", params.limit, offset);
+            }
+        }
+
+        let mut tx = self.db.begin().await?;
+
+        // Execute count query
+        let mut count_builder = sqlx::query_scalar(&count_query);
+        if let Some(params) = params {
+            if let Some(user_id) = params.user_id {
+                count_builder = count_builder.bind(user_id);
+            }
+        }
+        let total: i64 = count_builder.fetch_one(&mut *tx).await?;
+
+        // Execute main query
+        let mut query_builder = sqlx::query_as::<_, TokenPick>(&base_query);
+        if let Some(params) = params {
+            if let Some(user_id) = params.user_id {
+                query_builder = query_builder.bind(user_id);
+            }
+        }
+
+        let picks = query_builder.fetch_all(&mut *tx).await?;
+        tx.commit().await?;
+
+        Ok((picks, total))
+    }
+
+    pub async fn list_token_picks_group(
+        &self,
+        params: Option<&ListTokenPicksParams>,
+    ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
+        let mut base_query = r#"
+            SELECT tp.*,
+                   row_to_json(t) AS token,
+                   row_to_json(u) AS user
+            FROM social.token_picks tp
+            JOIN social.tokens t ON tp.token_address = t.address
+            JOIN public.user u ON tp.user_id = u.id
+            JOIN social.group_users gu ON tp.user_id = gu.user_id
+        "#
+        .to_string();
+
+        let mut where_clause = String::new();
+        if let Some(params) = params {
+            if let Some(group_ids) = &params.group_ids {
+                where_clause = format!(
+                    " WHERE gu.group_id IN ({})",
+                    group_ids
+                        .iter()
+                        .map(|id| id.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                );
+                dbg!(format!(
+                    "Fetching token picks for group ids: {}",
+                    &where_clause
+                ));
             }
         }
 
@@ -218,6 +298,49 @@ impl TokenRepository {
 
         Ok(token_pick.unwrap_or_default())
     }
+
+    //     pub async fn list_token_picks_by_group(
+    //         &self,
+    //         params: Option<&ListTokenPicksParams>,
+    //     ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
+    //         let mut base_query = r#"
+    //             SELECT tp.*,
+    //                    row_to_json(t) AS token,
+    //                    row_to_json(u) AS user,
+    //                    row_to_json(g) AS group
+    //             FROM social.token_picks tp
+    //             JOIN social.tokens t ON tp.token_address = t.address
+    //             JOIN public.user u ON tp.user_id = u.id
+    //             JOIN social.groups g ON tp.group_id = g.id
+    //         "#
+    //         .to_string();
+
+    //         let mut where_clause = Vec::new();
+    //         let mut bind_idx = 1;
+    //         let mut bindings = Vec::new();
+
+    //         if let Some(params) = params {
+    //             if let Some(user_id) = params.user_id {
+    //                 where_clause.push(format!("tp.user_id = ${}", bind_idx));
+    //                 bind_idx += 1;
+    //                 bindings.push(user_id);
+    //             }
+    //             if let Some(group_id) = params.group_id {
+    //                 where_clause.push(format!("tp.group_id = ${}", bind_idx));
+    //                 bindings.push(group_id);
+    //             }
+    //         }
+
+    //         if !where_clause.is_empty() {
+    //             base_query += " WHERE ";
+    //             base_query += &where_clause.join(" AND ");
+    //         }
+
+    //         // Rest of the implementation similar to list_token_picks
+    //         // ... (pagination, ordering, etc.)
+
+    //         Ok((picks, total))
+    //     }
 }
 
 #[derive(Debug, sqlx::FromRow)]

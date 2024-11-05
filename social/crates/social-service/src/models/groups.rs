@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ impl From<Group> for GroupResponse {
     }
 }
 
-#[derive(Debug, sqlx::FromRow, Serialize, ToSchema, Default)]
+#[derive(Debug, sqlx::FromRow, Serialize, ToSchema, Default, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateOrUpdateGroup {
     pub id: i64,

@@ -23,10 +23,12 @@ pub struct ApiDoc;
 
 pub fn setup_routes() -> Router<Arc<AppState>> {
     let api_doc = ApiDoc::openapi();
-    let token_router = OpenApiRouter::new().routes(routes!(
-        token_handlers::get_token_picks,
-        token_handlers::post_token_pick
-    ));
+    let token_router = OpenApiRouter::new()
+        .routes(routes!(
+            token_handlers::get_token_picks,
+            token_handlers::post_token_pick
+        ))
+        .routes(routes!(token_handlers::get_token_picks_by_group));
     let profile_router = OpenApiRouter::new()
         .routes(routes!(profile_handlers::get_profile))
         .routes(routes!(profile_handlers::get_profile_picks_and_stats));
