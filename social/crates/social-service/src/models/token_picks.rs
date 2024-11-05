@@ -3,7 +3,10 @@ use super::{
     users::{User, UserResponse},
 };
 use chrono::{DateTime, FixedOffset, Utc};
-use rust_decimal::{prelude::FromPrimitive, Decimal};
+use rust_decimal::{
+    prelude::{FromPrimitive, One, Zero},
+    Decimal,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
 use utoipa::{IntoParams, ToSchema};
@@ -110,8 +113,16 @@ pub struct TokenPickResponse {
 
 impl From<TokenPick> for TokenPickResponse {
     fn from(pick: TokenPick) -> Self {
-        let highest_mult_post_call =
-            (pick.highest_market_cap.unwrap_or_default() / pick.market_cap_at_call).round_dp(2);
+        let highest_mult_post_call = if let Some(highest_market_cap) = pick.highest_market_cap {
+            if highest_market_cap.is_zero() || pick.market_cap_at_call.is_zero() {
+                Decimal::zero()
+            } else {
+                highest_market_cap / pick.market_cap_at_call
+            }
+        } else {
+            Decimal::zero()
+        }
+        .round_dp(2);
         let highest_mult_post_call = highest_mult_post_call
             .to_string()
             .parse::<f32>()
