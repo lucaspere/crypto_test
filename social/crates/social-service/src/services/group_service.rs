@@ -43,6 +43,13 @@ impl GroupService {
             .map_err(|e| ApiError::DatabaseError(e))
     }
 
+    pub async fn list_groups(&self) -> Result<Vec<Group>, ApiError> {
+        self.repository
+            .list_groups()
+            .await
+            .map_err(|e| ApiError::DatabaseError(e))
+    }
+
     pub async fn add_user_to_group(
         &self,
         group_id: i64,
@@ -92,7 +99,7 @@ impl GroupService {
         user_id: Uuid,
     ) -> Result<Vec<CreateOrUpdateGroup>, ApiError> {
         self.repository
-            .list_groups(user_id)
+            .list_user_groups(user_id)
             .await
             .map_err(|e| ApiError::DatabaseError(e))
     }
