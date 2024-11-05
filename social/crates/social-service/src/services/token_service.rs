@@ -2,10 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rust_decimal::{
-    prelude::{One, Zero},
-    Decimal,
-};
+use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info, warn};
 

@@ -41,6 +41,7 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
         .routes(routes!(user_handlers::get_user_followers));
 
     let group_router = OpenApiRouter::new()
+        .routes(routes!(group_handlers::list_groups))
         .routes(routes!(
             group_handlers::get_group,
             group_handlers::create_or_update_group

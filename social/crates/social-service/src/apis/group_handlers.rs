@@ -76,6 +76,27 @@ pub(super) async fn get_group(
     Ok((StatusCode::OK, GroupResponse::from(group).into()))
 }
 
+#[utoipa::path(
+    get,
+    tag = GROUP_TAG,
+    path = "/list",
+    responses(
+        (status = 200, description = "Success", body = Vec<GroupResponse>),
+        (status = 404, description = "Not Found", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    )
+)]
+pub(super) async fn list_groups(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<(StatusCode, Json<Vec<GroupResponse>>), ApiError> {
+    let groups = app_state.group_service.list_groups().await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(groups.into_iter().map(GroupResponse::from).collect()),
+    ))
+}
+
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddUserRequest {

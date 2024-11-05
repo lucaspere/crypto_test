@@ -120,3 +120,16 @@ pub(super) async fn get_profile_picks_and_stats(
         Json(ProfilePicksAndStatsResponse { picks, stats }),
     ))
 }
+
+// #[derive(Deserialize, Serialize, ToSchema)]
+// pub struct LeaderboardQuery {
+//     page: i64,
+//     limit: i64,
+// }
+
+// pub(super) async fn leaderboard(
+//     State(app_state): State<Arc<AppState>>,
+//     Query(params): Query<LeaderboardQuery>,
+// ) -> Result<(StatusCode, Json<LeaderboardResponse>), ApiError> {
+//     StatusCode::OK.into_response()
+// }

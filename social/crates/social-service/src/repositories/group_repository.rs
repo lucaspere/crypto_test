@@ -117,7 +117,7 @@ impl GroupRepository {
         .await
     }
 
-    pub async fn list_groups(
+    pub async fn list_user_groups(
         &self,
         user_id: Uuid,
     ) -> Result<Vec<CreateOrUpdateGroup>, sqlx::Error> {
@@ -125,6 +125,37 @@ impl GroupRepository {
             "SELECT * FROM social.groups WHERE id IN (SELECT group_id FROM social.group_users WHERE user_id = $1)",
         )
         .bind(user_id)
+        .fetch_all(self.db.as_ref())
+        .await
+    }
+
+    pub async fn list_groups(&self) -> Result<Vec<Group>, sqlx::Error> {
+        sqlx::query_as::<_, Group>(
+            r#"SELECT
+                g.id,
+                g.name,
+                g.logo_uri,
+                g.created_at,
+                COALESCE(tp_count.count, 0) as token_pick_count,
+                COALESCE(gu_count.count, 0) as user_count,
+                COALESCE(tp_hit_rate.hit_rate, 0) as hit_rate
+            FROM social.groups g
+            LEFT JOIN (
+                SELECT group_id, COUNT(*) as count
+                FROM social.token_picks
+                GROUP BY group_id
+            ) tp_count ON g.id = tp_count.group_id
+            LEFT JOIN (
+                SELECT group_id, COUNT(DISTINCT user_id) as count
+                FROM social.group_users
+                GROUP BY group_id
+            ) gu_count ON g.id = gu_count.group_id
+            LEFT JOIN (
+                SELECT group_id, COUNT(hit_date) as hit_rate
+                FROM social.token_picks
+                GROUP BY group_id
+            ) tp_hit_rate ON g.id = tp_hit_rate.group_id"#,
+        )
         .fetch_all(self.db.as_ref())
         .await
     }

@@ -4,7 +4,7 @@ use super::{
 };
 use chrono::{DateTime, FixedOffset, Utc};
 use rust_decimal::{
-    prelude::{FromPrimitive, One, Zero},
+    prelude::{FromPrimitive, Zero},
     Decimal,
 };
 use serde::{Deserialize, Serialize};
