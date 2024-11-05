@@ -1,16 +1,20 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    models::groups::{CreateOrUpdateGroup, GroupResponse, GroupUser},
+    models::{
+        groups::{CreateOrUpdateGroup, GroupResponse, GroupUser},
+        profiles::ProfileDetailsResponse,
+        token_picks::TokenPickResponse,
+    },
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
@@ -95,6 +99,62 @@ pub(super) async fn list_groups(
         StatusCode::OK,
         Json(groups.into_iter().map(GroupResponse::from).collect()),
     ))
+}
+
+#[derive(Debug, Deserialize, IntoParams, Default)]
+pub struct GroupPicksQuery {
+    pub username: Option<String>,
+    #[param(default = 1)]
+    pub page: u32,
+    #[param(default = 10)]
+    pub limit: u32,
+    pub order_by: Option<String>,
+    pub order_direction: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    tag = GROUP_TAG,
+    path = "/{id}/picks",
+    responses(
+        (status = 200, description = "Success", body = Vec<TokenPickResponse>),
+    ),
+    params(GroupPicksQuery)
+)]
+pub(super) async fn get_group_picks(
+    State(app_state): State<Arc<AppState>>,
+    Path(group_id): Path<i64>,
+    Query(query): Query<GroupPicksQuery>,
+) -> Result<(StatusCode, Json<Vec<TokenPickResponse>>), ApiError> {
+    todo!()
+}
+
+#[derive(Debug, Deserialize, IntoParams, Default)]
+pub struct GroupMembersQuery {
+    pub username: Option<String>,
+    #[param(default = 1)]
+    pub page: u32,
+    #[param(default = 10)]
+    pub limit: u32,
+    pub order_by: Option<String>,
+    pub order_direction: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    tag = GROUP_TAG,
+    path = "/{id}/members",
+    responses(
+        (status = 200, description = "Success", body = Vec<ProfileDetailsResponse>)
+    ),
+    params(GroupMembersQuery)
+)]
+pub(super) async fn get_group_members(
+    State(app_state): State<Arc<AppState>>,
+    Path(group_id): Path<i64>,
+    Query(query): Query<GroupMembersQuery>,
+) -> Result<(StatusCode, Json<Vec<ProfileDetailsResponse>>), ApiError> {
+    todo!()
 }
 
 #[derive(Deserialize, ToSchema)]

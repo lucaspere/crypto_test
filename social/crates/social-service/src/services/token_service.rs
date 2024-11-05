@@ -292,6 +292,9 @@ impl TokenService {
             .ok_or(ApiError::UserNotFound)?;
 
         let groups = self.group_service.get_user_groups(user.id).await?;
+        if groups.is_empty() {
+            return Ok((HashMap::new(), 0));
+        }
         info!("Fetching token picks for groups: {:?}", groups);
         let res = self
             .list_token_picks(TokenQuery {
