@@ -104,7 +104,7 @@ pub struct PaginatedTokenPickGroupResponse {
 
 #[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct TokenGroupQuery {
-    pub user_id: Uuid,
+    pub user_id: Option<Uuid>,
     #[param(default = 1)]
     pub page: u32,
     #[param(default = 10)]
@@ -113,6 +113,7 @@ pub struct TokenGroupQuery {
     pub order_direction: Option<String>,
     #[param(default = false)]
     pub get_all: Option<bool>,
+    pub group_ids: Option<Vec<i64>>,
 }
 
 #[utoipa::path(

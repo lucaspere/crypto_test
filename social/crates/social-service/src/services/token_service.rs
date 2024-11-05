@@ -181,7 +181,7 @@ impl TokenService {
         let response = (pick_responses.clone(), total);
         if let Err(e) = self
             .redis_service
-            .set_cached(&cache_key, &response, 300)
+            .set_cached(&cache_key, &response, 600)
             .await
         {
             error!("Failed to cache token picks: {}", e);
@@ -285,20 +285,31 @@ impl TokenService {
         &self,
         query: TokenGroupQuery,
     ) -> Result<(HashMap<String, Vec<TokenPickResponse>>, i64), ApiError> {
-        let user = self
-            .user_service
-            .get_by_id(query.user_id)
-            .await?
-            .ok_or(ApiError::UserNotFound)?;
+        let groups = if let Some(user_id) = query.user_id {
+            let user = self
+                .user_service
+                .get_by_id(user_id)
+                .await?
+                .ok_or(ApiError::UserNotFound)?;
 
-        let groups = self.group_service.get_user_groups(user.id).await?;
+            self.group_service.get_user_groups(user.id).await?
+        } else if let Some(group_ids) = query.group_ids {
+            let groups = self.group_service.list_groups().await?;
+            groups
+                .into_iter()
+                .filter(|g| group_ids.contains(&g.id))
+                .map(CreateOrUpdateGroup::from)
+                .collect()
+        } else {
+            return Ok((HashMap::new(), 0));
+        };
         if groups.is_empty() {
             return Ok((HashMap::new(), 0));
         }
         info!("Fetching token picks for groups: {:?}", groups);
         let res = self
             .list_token_picks(TokenQuery {
-                username: Some(user.username),
+                username: None,
                 page: query.page,
                 limit: query.limit,
                 order_by: query.order_by,

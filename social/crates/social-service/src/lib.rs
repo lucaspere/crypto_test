@@ -73,6 +73,7 @@ pub async fn setup_services(
     let group_service = Arc::new(GroupService::new(
         group_repository.clone(),
         Arc::new(user_service.clone()),
+        Arc::new(None),
     ));
     let birdeye_service = Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone()));
     let rust_monorepo = Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
@@ -93,6 +94,11 @@ pub async fn setup_services(
         redis_service.clone(),
         token_service.clone(),
     );
+    let group_service = Arc::new(GroupService::new(
+        group_repository.clone(),
+        Arc::new(user_service.clone()),
+        Arc::new(Some(profile_service.clone())),
+    ));
     Ok((user_service, profile_service, token_service, group_service))
 }
 

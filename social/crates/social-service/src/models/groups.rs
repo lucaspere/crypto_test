@@ -4,6 +4,8 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use super::profiles::ProfileDetailsResponse;
+
 #[derive(Clone, Debug, PartialEq, FromRow)]
 pub struct Group {
     pub id: i64,
@@ -51,10 +53,22 @@ pub struct CreateOrUpdateGroup {
     pub logo_uri: Option<String>,
 }
 
+impl From<Group> for CreateOrUpdateGroup {
+    fn from(group: Group) -> Self {
+        CreateOrUpdateGroup {
+            id: group.id,
+            name: group.name,
+            logo_uri: group.logo_uri,
+        }
+    }
+}
+
 #[derive(Debug, sqlx::FromRow)]
 pub struct GroupWithUsers {
-    pub group: Group,
-    pub users: Vec<GroupUser>,
+    pub group_id: i64,
+    pub user_id: Uuid,
+    pub joined_at: DateTime<Utc>,
+    pub username: String,
 }
 
 #[derive(Debug, sqlx::FromRow, Serialize, ToSchema)]
@@ -63,4 +77,10 @@ pub struct GroupUser {
     pub group_id: i64,
     pub user_id: Uuid,
     pub joined_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupMembersResponse {
+    pub members: Vec<ProfileDetailsResponse>,
 }
