@@ -7,9 +7,10 @@ use sqlx::types::Json;
 use tracing::{debug, error, info};
 
 use crate::{
-    apis::token_handlers::TokenQuery,
+    apis::token_handlers::{TokenGroupQuery, TokenQuery},
     external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
+        groups::CreateOrUpdateGroup,
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Token, TokenPickRequest},
     },
@@ -18,7 +19,7 @@ use crate::{
     utils::api_errors::ApiError,
 };
 
-use super::redis_service::RedisService;
+use super::{group_service::GroupService, redis_service::RedisService};
 
 pub struct TokenService {
     token_repository: Arc<TokenRepository>,
@@ -26,6 +27,7 @@ pub struct TokenService {
     user_service: Arc<UserService>,
     redis_service: Arc<RedisService>,
     birdeye_service: Arc<BirdeyeService>,
+    group_service: Arc<GroupService>,
 }
 
 impl TokenService {
@@ -35,6 +37,7 @@ impl TokenService {
         user_service: Arc<UserService>,
         redis_service: Arc<RedisService>,
         birdeye_service: Arc<BirdeyeService>,
+        group_service: Arc<GroupService>,
     ) -> Self {
         Self {
             token_repository,
@@ -42,6 +45,7 @@ impl TokenService {
             user_service,
             redis_service,
             birdeye_service,
+            group_service,
         }
     }
 
@@ -51,9 +55,9 @@ impl TokenService {
     ) -> Result<(Vec<TokenPickResponse>, i64), ApiError> {
         debug!("Listing token picks with query: {:?}", query);
 
-        let user = if let Some(username) = query.username {
+        let user = if let Some(username) = &query.username {
             debug!("Looking up user by username: {}", username);
-            self.user_service.get_by_username(&username).await?
+            self.user_service.get_by_username(username).await?
         } else {
             None
         };
@@ -65,6 +69,7 @@ impl TokenService {
             order_by: query.order_by,
             order_direction: query.order_direction,
             get_all: query.get_all.unwrap_or(false),
+            group_ids: query.group_ids,
         };
 
         let cache_key = format!(
@@ -83,11 +88,19 @@ impl TokenService {
         }
 
         debug!("Cache miss, fetching token picks from database");
-        let (mut picks, total) = self
-            .token_repository
-            .list_token_picks(Some(&params))
-            .await
-            .map_err(ApiError::from)?;
+
+        let (mut picks, total) = if query.username.is_some() {
+            info!("Fetching token picks group: {}", query.username.unwrap());
+            self.token_repository
+                .list_token_picks_group(Some(&params))
+                .await
+                .map_err(ApiError::from)?
+        } else {
+            self.token_repository
+                .list_token_picks(Some(&params))
+                .await
+                .map_err(ApiError::from)?
+        };
 
         let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
         debug!(
@@ -264,6 +277,45 @@ impl TokenService {
         }
 
         Ok(token_pick)
+    }
+
+    pub async fn list_token_picks_group(
+        &self,
+        query: TokenGroupQuery,
+    ) -> Result<(HashMap<String, Vec<TokenPickResponse>>, i64), ApiError> {
+        let user = self
+            .user_service
+            .get_by_id(query.user_id)
+            .await?
+            .ok_or(ApiError::UserNotFound)?;
+
+        let groups = self.group_service.get_user_groups(user.id).await?;
+        info!("Fetching token picks for groups: {:?}", groups);
+        let res = self
+            .list_token_picks(TokenQuery {
+                username: Some(user.username),
+                page: query.page,
+                limit: query.limit,
+                order_by: query.order_by,
+                order_direction: query.order_direction,
+                get_all: query.get_all,
+                group_ids: Some(groups.iter().map(|g| g.id).collect()),
+            })
+            .await
+            .map_err(ApiError::from)?;
+        let group_hash: HashMap<i64, &CreateOrUpdateGroup> =
+            groups.iter().map(|g| (g.id, g)).collect();
+        let map_group_id: HashMap<String, Vec<TokenPickResponse>> =
+            res.0.iter().fold(HashMap::new(), |mut acc, pick| {
+                if let Some(group) = group_hash.get(&pick.group_id) {
+                    acc.entry(group.name.clone())
+                        .or_default()
+                        .push(pick.clone());
+                }
+                acc
+            });
+
+        Ok((map_group_id, res.1))
     }
 }
 

@@ -82,6 +82,7 @@ pub async fn setup_services(
         Arc::new(user_service.clone()),
         redis_service.clone(),
         birdeye_service.clone(),
+        group_service.clone(),
     );
     let token_service = Arc::new(token_service);
     let profile_service = ProfileService::new(

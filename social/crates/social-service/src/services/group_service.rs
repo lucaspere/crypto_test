@@ -86,4 +86,14 @@ impl GroupService {
             Err(ApiError::UserNotFound)
         }
     }
+
+    pub async fn get_user_groups(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<CreateOrUpdateGroup>, ApiError> {
+        self.repository
+            .list_groups(user_id)
+            .await
+            .map_err(|e| ApiError::DatabaseError(e))
+    }
 }

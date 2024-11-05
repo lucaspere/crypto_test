@@ -116,4 +116,16 @@ impl GroupRepository {
         .fetch_optional(self.db.as_ref())
         .await
     }
+
+    pub async fn list_groups(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<CreateOrUpdateGroup>, sqlx::Error> {
+        sqlx::query_as::<_, CreateOrUpdateGroup>(
+            "SELECT * FROM social.groups WHERE id IN (SELECT group_id FROM social.group_users WHERE user_id = $1)",
+        )
+        .bind(user_id)
+        .fetch_all(self.db.as_ref())
+        .await
+    }
 }

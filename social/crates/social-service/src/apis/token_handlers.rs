@@ -9,8 +9,9 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 pub const TAG: &str = "token";
 
@@ -34,6 +35,7 @@ pub struct TokenQuery {
     pub order_direction: Option<String>,
     #[param(default = false)]
     pub get_all: Option<bool>,
+    pub group_ids: Option<Vec<i64>>,
 }
 
 #[utoipa::path(
@@ -88,4 +90,60 @@ pub(super) async fn post_token_pick(
     let token_pick = app_state.token_service.save_token_pick(body).await?;
 
     Ok((StatusCode::OK, Json(token_pick.into())))
+}
+
+#[derive(Debug, Deserialize, IntoParams, Default, serde::Serialize, ToSchema)]
+pub struct PaginatedTokenPickGroupResponse {
+    /// Group name and token picks
+    pub items: HashMap<String, Vec<TokenPickResponse>>,
+    pub total: i64,
+    pub page: u32,
+    pub limit: u32,
+    pub total_pages: u32,
+}
+
+#[derive(Debug, Deserialize, IntoParams, Default)]
+pub struct TokenGroupQuery {
+    pub user_id: Uuid,
+    #[param(default = 1)]
+    pub page: u32,
+    #[param(default = 10)]
+    pub limit: u32,
+    pub order_by: Option<String>,
+    pub order_direction: Option<String>,
+    #[param(default = false)]
+    pub get_all: Option<bool>,
+}
+
+#[utoipa::path(
+    get,
+    tag = TAG,
+    path = "/my-group",
+    responses(
+        (status = 200, description = "Token picks by group", body = PaginatedTokenPickGroupResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    params(TokenGroupQuery)
+)]
+pub async fn get_token_picks_by_group(
+    State(app_state): State<Arc<AppState>>,
+    Query(query): Query<TokenGroupQuery>,
+) -> Result<(StatusCode, Json<PaginatedTokenPickGroupResponse>), ApiError> {
+    let limit = query.limit;
+    let page = query.page;
+    let (picks, total) = app_state
+        .token_service
+        .list_token_picks_group(query)
+        .await?;
+    let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
+
+    let response = PaginatedTokenPickGroupResponse {
+        items: picks,
+        total,
+        page,
+        limit,
+        total_pages,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }
