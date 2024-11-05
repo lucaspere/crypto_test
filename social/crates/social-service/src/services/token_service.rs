@@ -92,8 +92,8 @@ impl TokenService {
 
         debug!("Cache miss, fetching token picks from database");
 
-        let (mut picks, total) = if query.username.is_some() {
-            info!("Fetching token picks group: {}", query.username.unwrap());
+        let (mut picks, total) = if params.group_ids.is_some() {
+            info!("Fetching token picks group");
             self.token_repository
                 .list_token_picks_group(Some(&params))
                 .await
