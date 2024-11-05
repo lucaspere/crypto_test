@@ -2,7 +2,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::models::groups::{CreateOrUpdateGroup, Group, GroupUser};
+use crate::models::groups::{CreateOrUpdateGroup, Group, GroupUser, GroupWithUsers};
 
 pub struct GroupRepository {
     db: Arc<PgPool>,
@@ -156,6 +156,26 @@ impl GroupRepository {
                 GROUP BY group_id
             ) tp_hit_rate ON g.id = tp_hit_rate.group_id"#,
         )
+        .fetch_all(self.db.as_ref())
+        .await
+    }
+
+    pub async fn list_group_members(
+        &self,
+        group_id: i64,
+        limit: u32,
+        page: u32,
+    ) -> Result<Vec<GroupWithUsers>, sqlx::Error> {
+        sqlx::query_as::<_, GroupWithUsers>(
+            r#"SELECT gu.*, u.username FROM social.group_users gu
+            JOIN public.user u ON gu.user_id = u.id
+            WHERE gu.group_id = $1
+            ORDER BY gu.joined_at DESC
+            LIMIT $2 OFFSET $3"#,
+        )
+        .bind(group_id)
+        .bind(limit as i64)
+        .bind(((page - 1) * limit) as i64)
         .fetch_all(self.db.as_ref())
         .await
     }

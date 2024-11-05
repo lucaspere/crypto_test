@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use rust_decimal::Decimal;
+use rust_decimal::{prelude::One, Decimal};
 use tracing::info;
 
 use crate::{
@@ -134,13 +134,13 @@ impl ProfileService {
         let total_picks = picks.len() as i32;
         let total_hits = picks.iter().filter(|p| p.hit_date.is_some()).count() as i32;
 
-        let hit_rate = if total_picks > 0 {
+        let hit_rate = if total_picks > 0 && hits_2x > 0 {
             Decimal::from(hits_2x * 100) / Decimal::from(total_picks)
         } else {
             Decimal::ZERO
         };
 
-        let average_pick_return = if total_picks > 0 {
+        let average_pick_return = if total_picks > 0 && !total_returns.is_zero() {
             total_returns / Decimal::from(total_picks)
         } else {
             Decimal::ZERO
@@ -174,7 +174,11 @@ impl ProfileService {
 }
 
 fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
-    highest_market_cap / market_cap_at_call
+    if market_cap_at_call.is_zero() || highest_market_cap.is_zero() {
+        Decimal::one()
+    } else {
+        highest_market_cap / market_cap_at_call
+    }
 }
 
 #[cfg(test)]

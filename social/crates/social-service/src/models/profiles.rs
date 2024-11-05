@@ -8,7 +8,7 @@ use super::user_stats::UserStats;
 
 pub struct Profile;
 /// A summary of a user's picks (calls).
-#[derive(Deserialize, Serialize, ToSchema, Default)]
+#[derive(Deserialize, Serialize, ToSchema, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfilePickSummary {
     /// The sum total of all of a user's picks expressed as an integer.
@@ -33,7 +33,7 @@ impl From<UserStats> for ProfilePickSummary {
 }
 
 /// A summary of a user's tier.
-#[derive(Deserialize, Serialize, ToSchema, Default)]
+#[derive(Deserialize, Serialize, ToSchema, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileTier {
     /// Total points a user has accumulated.
@@ -47,7 +47,7 @@ pub struct ProfileTier {
 }
 
 /// A user's profile details response.
-#[derive(Deserialize, Serialize, ToSchema, Default)]
+#[derive(Deserialize, Serialize, ToSchema, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileDetailsResponse {
     /// User's ID

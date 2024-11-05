@@ -10,14 +10,12 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    models::{
-        groups::{CreateOrUpdateGroup, GroupResponse, GroupUser},
-        profiles::ProfileDetailsResponse,
-        token_picks::TokenPickResponse,
-    },
+    models::groups::{CreateOrUpdateGroup, GroupMembersResponse, GroupResponse, GroupUser},
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
+
+use super::token_handlers::{PaginatedTokenPickResponse, TokenGroupQuery};
 
 pub const GROUP_TAG: &str = "group";
 
@@ -117,7 +115,7 @@ pub struct GroupPicksQuery {
     tag = GROUP_TAG,
     path = "/{id}/picks",
     responses(
-        (status = 200, description = "Success", body = Vec<TokenPickResponse>),
+        (status = 200, description = "Success", body = Vec<PaginatedTokenPickResponse>),
     ),
     params(GroupPicksQuery)
 )]
@@ -125,8 +123,35 @@ pub(super) async fn get_group_picks(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Query(query): Query<GroupPicksQuery>,
-) -> Result<(StatusCode, Json<Vec<TokenPickResponse>>), ApiError> {
-    todo!()
+) -> Result<(StatusCode, Json<PaginatedTokenPickResponse>), ApiError> {
+    let limit = query.limit;
+    let page = query.page;
+
+    let picks = app_state
+        .token_service
+        .list_token_picks_group(TokenGroupQuery {
+            group_ids: Some(vec![group_id]),
+            limit,
+            page,
+            order_by: query.order_by,
+            order_direction: query.order_direction,
+            get_all: None,
+            user_id: None,
+        })
+        .await?;
+    let total = picks.1;
+    let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
+    let picks = picks.0.into_values().next().unwrap_or(vec![]);
+    Ok((
+        StatusCode::OK,
+        Json(PaginatedTokenPickResponse {
+            items: picks,
+            total,
+            page,
+            limit,
+            total_pages,
+        }),
+    ))
 }
 
 #[derive(Debug, Deserialize, IntoParams, Default)]
@@ -140,12 +165,22 @@ pub struct GroupMembersQuery {
     pub order_direction: Option<String>,
 }
 
+#[derive(serde::Serialize, ToSchema)]
+pub struct PaginatedGroupMembersResponse {
+    #[serde(flatten)]
+    pub items: GroupMembersResponse,
+    pub total: i64,
+    pub page: u32,
+    pub limit: u32,
+    pub total_pages: u32,
+}
+
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/{id}/members",
     responses(
-        (status = 200, description = "Success", body = Vec<ProfileDetailsResponse>)
+        (status = 200, description = "Success", body = PaginatedGroupMembersResponse)
     ),
     params(GroupMembersQuery)
 )]
@@ -153,8 +188,26 @@ pub(super) async fn get_group_members(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Query(query): Query<GroupMembersQuery>,
-) -> Result<(StatusCode, Json<Vec<ProfileDetailsResponse>>), ApiError> {
-    todo!()
+) -> Result<(StatusCode, Json<PaginatedGroupMembersResponse>), ApiError> {
+    let limit = query.limit;
+    let page = query.page;
+
+    let members = app_state
+        .group_service
+        .list_group_members(group_id, limit, page)
+        .await?;
+    let total = members.members.len() as i64;
+    let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
+    Ok((
+        StatusCode::OK,
+        Json(PaginatedGroupMembersResponse {
+            items: members,
+            total,
+            page,
+            limit,
+            total_pages,
+        }),
+    ))
 }
 
 #[derive(Deserialize, ToSchema)]
