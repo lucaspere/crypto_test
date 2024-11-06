@@ -370,15 +370,15 @@ impl TokenRepository {
         pick_id: i64,
         new_highest_market_cap: Decimal,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query!(
+        sqlx::query(
             r#"
 			UPDATE social.token_picks
 			SET highest_market_cap = $1
 			WHERE id = $2
 			"#,
-            new_highest_market_cap.round_dp(8),
-            pick_id
         )
+        .bind(new_highest_market_cap.round_dp(8))
+        .bind(pick_id)
         .execute(self.db.as_ref())
         .await?;
 
