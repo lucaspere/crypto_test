@@ -5,6 +5,7 @@ use futures::future::join_all;
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use crate::{
     apis::token_handlers::{TokenGroupQuery, TokenQuery},
@@ -49,6 +50,20 @@ impl TokenService {
         }
     }
 
+    fn generate_token_picks_cache_key(&self, params: &ListTokenPicksParams) -> String {
+        format!(
+            "token_picks:{}:{}:{}:{}:{}:{}",
+            params.user_id.unwrap_or(Uuid::nil()),
+            params.page,
+            params.limit,
+            params.order_by.clone().unwrap_or_default(),
+            params.order_direction.clone().unwrap_or_default(),
+            params
+                .picked_after
+                .map_or("none".to_string(), |t| t.to_rfc3339())
+        )
+    }
+
     pub async fn list_token_picks(
         &self,
         query: TokenQuery,
@@ -76,21 +91,18 @@ impl TokenService {
                 .map(|t| t.to_date_time(Utc::now().into())),
         };
 
-        let cache_key = format!(
-            "token_picks:user_id={:?}:page={}:limit={}:order_by={:?}:direction={:?}:picked_after={:?}",
-            params.user_id, params.page, params.limit, params.order_by, params.order_direction, query.picked_after.map(|t| t.to_string())
-        );
+        let cache_key = self.generate_token_picks_cache_key(&params);
 
         if let Ok(Some(cached)) = self
             .redis_service
             .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
             .await
         {
-            info!("Cache hit for token picks list");
+            debug!("Cache hit for token picks list: {}", cache_key);
             return Ok(cached);
         }
 
-        debug!("Cache miss, fetching token picks from database");
+        debug!("Cache miss for token picks list: {}", cache_key);
 
         let (picks, total) = if params.group_ids.is_some() {
             info!("Fetching token picks group");
@@ -105,13 +117,9 @@ impl TokenService {
                 .map_err(ApiError::from)?
         };
 
-        // Process all picks concurrently
         let pick_futures: Vec<_> = picks
             .iter()
-            .map(|pick| {
-                let pick_cache_key = format!("token_pick:{}", pick.id);
-                self.process_pick_with_cache(pick, pick_cache_key)
-            })
+            .map(|pick| self.process_pick_with_cache(pick))
             .collect();
 
         let pick_responses = join_all(pick_futures)
@@ -122,22 +130,24 @@ impl TokenService {
         let response = (pick_responses.clone(), total);
         if let Err(e) = self
             .redis_service
-            .set_cached(&cache_key, &response, 600)
+            .set_cached(&cache_key, &response, 300)
             .await
         {
             error!("Failed to cache token picks list: {}", e);
         }
 
-        Ok((pick_responses, total))
+        Ok(response)
     }
 
-    // New helper method to handle caching and processing for a single pick
     async fn process_pick_with_cache(
         &self,
         pick: &TokenPick,
-        cache_key: String,
     ) -> Result<TokenPickResponse, ApiError> {
-        // Try to get from cache first
+        let cache_key = format!(
+            "token_pick:{}:{}:{}",
+            pick.id, pick.user.id, pick.token.address
+        );
+
         if let Ok(Some(cached_pick)) = self
             .redis_service
             .get_cached::<TokenPickResponse>(&cache_key)
@@ -146,13 +156,11 @@ impl TokenService {
             return Ok(cached_pick);
         }
 
-        // Process the pick if not in cache
         let processed_pick = self.process_single_pick(pick).await?;
 
-        // Cache the processed pick
         if let Err(e) = self
             .redis_service
-            .set_cached(&cache_key, &processed_pick, 600)
+            .set_cached(&cache_key, &processed_pick, 300)
             .await
         {
             error!("Failed to cache individual token pick {}: {}", pick.id, e);
@@ -291,10 +299,13 @@ impl TokenService {
 
         info!("Successfully saved token pick with id {}", token_pick.id);
 
-        let cache_key = format!("user_picks_stats:{}", user.username);
-        if let Err(e) = self.redis_service.delete_cached(&cache_key).await {
-            error!("Failed to invalidate cache: {}", e);
-        }
+        let user_cache_key = format!("user_picks_stats:{}", user.username);
+        let list_cache_pattern = format!("token_picks:{}:*", user.id);
+
+        self.redis_service.delete_cached(&user_cache_key).await?;
+        self.redis_service
+            .delete_pattern(&list_cache_pattern)
+            .await?;
 
         Ok(token_pick)
     }
@@ -325,7 +336,7 @@ impl TokenService {
             return Ok((HashMap::new(), 0));
         }
         info!("Fetching token picks for groups: {:?}", groups);
-        let res = self
+        let (picks, total) = self
             .list_token_picks(TokenQuery {
                 username: None,
                 page: query.page,
@@ -338,10 +349,11 @@ impl TokenService {
             })
             .await
             .map_err(ApiError::from)?;
+        debug!("Fetched {:?} token picks", picks);
         let group_hash: HashMap<i64, &CreateOrUpdateGroup> =
             groups.iter().map(|g| (g.id, g)).collect();
         let map_group_id: HashMap<String, Vec<TokenPickResponse>> =
-            res.0.iter().fold(HashMap::new(), |mut acc, pick| {
+            picks.iter().fold(HashMap::new(), |mut acc, pick| {
                 if let Some(group) = group_hash.get(&pick.group_id) {
                     acc.entry(group.name.clone())
                         .or_default()
@@ -349,8 +361,7 @@ impl TokenService {
                 }
                 acc
             });
-
-        Ok((map_group_id, res.1))
+        Ok((map_group_id, total))
     }
 }
 

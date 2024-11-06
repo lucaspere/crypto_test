@@ -28,6 +28,7 @@ pub struct GroupResponse {
     total_users: i64,
     total_pick_returns: u64,
     hit_rate: u64,
+    realized_profit: u64,
 }
 
 impl From<Group> for GroupResponse {
@@ -41,6 +42,7 @@ impl From<Group> for GroupResponse {
             total_users: group.user_count,
             total_pick_returns: 0,
             hit_rate: 0,
+            realized_profit: 0,
         }
     }
 }
