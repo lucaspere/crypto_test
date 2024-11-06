@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -28,8 +27,8 @@ pub struct GroupResponse {
     created_at: DateTime<Utc>,
     total_token_pick: i64,
     total_users: i64,
-    total_pick_returns: Decimal,
-    hit_rate: Decimal,
+    total_pick_returns: f64,
+    hit_rate: f64,
     realized_profit: u64,
 }
 
@@ -42,12 +41,8 @@ impl From<Group> for GroupResponse {
             created_at: group.created_at,
             total_token_pick: group.token_pick_count,
             total_users: group.user_count,
-            total_pick_returns: Decimal::from_f64_retain(group.total_returns)
-                .unwrap_or_default()
-                .round_dp(2),
-            hit_rate: Decimal::from_f64_retain(group.hit_rate)
-                .unwrap_or_default()
-                .round_dp(2),
+            total_pick_returns: group.total_returns,
+            hit_rate: group.hit_rate,
             realized_profit: 0,
         }
     }

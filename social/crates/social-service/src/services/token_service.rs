@@ -104,7 +104,7 @@ impl TokenService {
 
         debug!("Cache miss for token picks list: {}", cache_key);
 
-        let (picks, total) = if params.group_ids.is_some() {
+        let (mut picks, total) = if params.group_ids.is_some() {
             info!("Fetching token picks group");
             self.token_repository
                 .list_token_picks_group(Some(&params))
@@ -118,7 +118,7 @@ impl TokenService {
         };
 
         let pick_futures: Vec<_> = picks
-            .iter()
+            .iter_mut()
             .map(|pick| self.process_pick_with_cache(pick))
             .collect();
 
@@ -141,7 +141,7 @@ impl TokenService {
 
     async fn process_pick_with_cache(
         &self,
-        pick: &TokenPick,
+        pick: &mut TokenPick,
     ) -> Result<TokenPickResponse, ApiError> {
         let cache_key = format!(
             "token_pick:{}:{}:{}",
@@ -169,7 +169,10 @@ impl TokenService {
         Ok(processed_pick)
     }
 
-    async fn process_single_pick(&self, pick: &TokenPick) -> Result<TokenPickResponse, ApiError> {
+    async fn process_single_pick(
+        &self,
+        pick: &mut TokenPick,
+    ) -> Result<TokenPickResponse, ApiError> {
         let latest_prices = self
             .rust_monorepo_service
             .get_latest_w_metadata(vec![pick.token.address.clone()])
@@ -179,15 +182,27 @@ impl TokenService {
             .get(&pick.token.address)
             .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
 
-        // if !TokenPick::is_qualified(
-        //     latest_price.metadata.mc.unwrap_or_default(),
-        //     latest_price.metadata.liquidity,
-        //     latest_price.metadata.v_24h_usd,
-        // ) {
-        //     warn!("Token {} is not qualified", pick.token.symbol);
-        // }
-
         let current_market_cap = latest_price.metadata.mc.unwrap_or_default();
+        let mut has_update = false;
+        if pick.highest_market_cap.is_none() {
+            let ohlcv = self
+                .birdeye_service
+                .get_ohlcv_request(
+                    &pick.token.chain,
+                    &pick.token.address,
+                    pick.call_date.timestamp(),
+                    Utc::now().timestamp(),
+                    "15m",
+                )
+                .await?;
+
+            pick.highest_market_cap = Some(ohlcv.high);
+            let hit_2x = ohlcv.high / pick.market_cap_at_call >= Decimal::from(2);
+            if hit_2x {
+                pick.hit_date = Some(Utc::now().into());
+            }
+            has_update = true;
+        }
 
         // Check if we need to update the highest market cap
         if current_market_cap > pick.highest_market_cap.unwrap_or_default() {
@@ -198,36 +213,39 @@ impl TokenService {
                 current_market_cap
             );
 
-            // Update in database
-            // self.token_repository
-            //     .update_highest_market_cap(pick.id, current_market_cap)
-            //     .await
-            //     .map_err(ApiError::from)?;
-        }
+            pick.highest_market_cap = Some(current_market_cap);
 
-        // let ohlcv = self
-        //     .birdeye_service
-        //     .get_ohlcv_request(
-        //         &pick.token.chain,
-        //         &pick.token.address,
-        //         pick.call_date.timestamp(),
-        //         Utc::now().timestamp(),
-        //         "15m",
-        //     )
-        //     .await?;
+            let hit_2x = current_market_cap / pick.market_cap_at_call >= Decimal::from(2);
+            if hit_2x {
+                pick.hit_date = Some(Utc::now().into());
+            }
+            has_update = true;
+        }
 
         let mut pick_response = TokenPickResponse::from(pick.clone());
         pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
         pick_response.current_market_cap = current_market_cap.round_dp(2);
-        pick_response.highest_mc_post_call =
-            Some(current_market_cap.max(pick.highest_market_cap.unwrap_or_default()));
-        pick_response.highest_mult_post_call =
+        pick_response.current_multiplier =
             calculate_return(&pick.market_cap_at_call, &current_market_cap)
                 .round_dp(2)
                 .to_string()
                 .parse::<f32>()
                 .unwrap_or_default();
 
+        if has_update || pick_response.highest_mult_post_call > 2.0 {
+            info!("Updating highest market cap for token pick {}", pick.id);
+            let hit_date = pick.hit_date.take().map(|d| d.into());
+            if let Err(e) = self
+                .token_repository
+                .update_highest_market_cap(pick.id, pick.highest_market_cap.unwrap(), hit_date)
+                .await
+            {
+                error!(
+                    "Failed to update highest market cap for token pick {}: {}",
+                    pick.id, e
+                );
+            }
+        }
         Ok(pick_response)
     }
 
