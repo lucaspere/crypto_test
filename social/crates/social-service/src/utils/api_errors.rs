@@ -22,6 +22,9 @@ pub enum ApiError {
 
     #[error("User already followed")]
     UserAlreadyFollowed,
+
+    #[error("Redis error: {0}")]
+    RedisError(#[from] redis::RedisError),
 }
 
 impl ApiError {
@@ -33,6 +36,7 @@ impl ApiError {
             ApiError::RequestError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::UserAlreadyFollowed => StatusCode::CONFLICT,
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            ApiError::RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

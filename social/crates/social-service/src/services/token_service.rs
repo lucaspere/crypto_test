@@ -4,7 +4,7 @@ use chrono::Utc;
 use futures::future::join_all;
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::{
     apis::token_handlers::{TokenGroupQuery, TokenQuery},
@@ -70,26 +70,29 @@ impl TokenService {
             order_direction: query.order_direction,
             get_all: query.get_all.unwrap_or(false),
             group_ids: query.group_ids,
+            picked_after: query
+                .picked_after
+                .clone()
+                .map(|t| t.to_date_time(Utc::now().into())),
         };
 
         let cache_key = format!(
-            "token_picks:user_id={:?}:page={}:limit={}:order_by={:?}:direction={:?}",
-            params.user_id, params.page, params.limit, params.order_by, params.order_direction
+            "token_picks:user_id={:?}:page={}:limit={}:order_by={:?}:direction={:?}:picked_after={:?}",
+            params.user_id, params.page, params.limit, params.order_by, params.order_direction, query.picked_after.map(|t| t.to_string())
         );
-        debug!("Checking cache for key: {}", cache_key);
 
         if let Ok(Some(cached)) = self
             .redis_service
             .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
             .await
         {
-            info!("Cache hit for token picks");
+            info!("Cache hit for token picks list");
             return Ok(cached);
         }
 
         debug!("Cache miss, fetching token picks from database");
 
-        let (mut picks, total) = if params.group_ids.is_some() {
+        let (picks, total) = if params.group_ids.is_some() {
             info!("Fetching token picks group");
             self.token_repository
                 .list_token_picks_group(Some(&params))
@@ -102,107 +105,122 @@ impl TokenService {
                 .map_err(ApiError::from)?
         };
 
-        let token_addresses: Vec<_> = picks.iter().map(|p| p.token.address.clone()).collect();
-        debug!(
-            "Fetching latest prices for {} tokens",
-            token_addresses.len()
-        );
+        // Process all picks concurrently
+        let pick_futures: Vec<_> = picks
+            .iter()
+            .map(|pick| {
+                let pick_cache_key = format!("token_pick:{}", pick.id);
+                self.process_pick_with_cache(pick, pick_cache_key)
+            })
+            .collect();
 
-        let latest_prices_future = self
-            .rust_monorepo_service
-            .get_latest_w_metadata(token_addresses);
+        let pick_responses = join_all(pick_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let ohlcv_futures = picks.iter().map(|pick| {
-            let birdeye_service = self.birdeye_service.clone();
-            async move {
-                birdeye_service
-                    .get_ohlcv_request(
-                        &pick.token.chain,
-                        &pick.token.address,
-                        pick.call_date.timestamp(),
-                        Utc::now().timestamp(),
-                        "15m",
-                    )
-                    .await
-                    .map(|result| (pick.token.address.clone(), result))
-            }
-        });
-
-        debug!("Fetching latest prices and OHLCV data concurrently");
-        let (latest_prices, ohlcv_results) =
-            tokio::join!(latest_prices_future, join_all(ohlcv_futures));
-        let latest_prices = latest_prices?;
-        let ohlcv_map: HashMap<_, _> = ohlcv_results.into_iter().filter_map(Result::ok).collect();
-
-        let mut picks_to_update = HashMap::with_capacity(picks.len());
-        let mut pick_responses = Vec::with_capacity(picks.len());
-
-        debug!("Processing {} picks", picks.len());
-        for pick in &mut picks {
-            let latest_price = latest_prices
-                .get(&pick.token.address)
-                .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
-
-            if !TokenPick::is_qualified(
-                latest_price.metadata.mc.unwrap_or_default(),
-                latest_price.metadata.liquidity,
-                latest_price.metadata.v_24h_usd,
-            ) {
-                warn!("Token {} is not qualified", pick.token.symbol);
-                continue;
-            }
-
-            let highest_price = ohlcv_map
-                .get(&pick.token.address)
-                .ok_or_else(|| ApiError::InternalServerError("OHLCV data not found".to_string()))?;
-
-            let supply = latest_price.metadata.supply.unwrap_or_default();
-            let highest_market_cap = highest_price.high * supply;
-
-            if highest_market_cap > pick.highest_market_cap.unwrap_or_default() {
-                info!(
-                    "New highest market cap for token {}: {}",
-                    pick.token.symbol, highest_market_cap
-                );
-                pick.highest_market_cap = Some(highest_market_cap);
-                picks_to_update.insert(pick.id, pick.clone());
-            }
-
-            let mut pick_response = TokenPickResponse::from(pick.clone());
-            pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
-            pick_response.current_market_cap =
-                latest_price.metadata.mc.unwrap_or_default().round_dp(2);
-            pick_response.current_multiplier = 1.2;
-
-            pick_responses.push(pick_response);
-        }
-
-        debug!("Caching {} pick responses", pick_responses.len());
         let response = (pick_responses.clone(), total);
         if let Err(e) = self
             .redis_service
             .set_cached(&cache_key, &response, 600)
             .await
         {
-            error!("Failed to cache token picks: {}", e);
+            error!("Failed to cache token picks list: {}", e);
         }
 
-        if !picks_to_update.is_empty() {
-            info!(
-                "Updating {} token picks with new market caps",
-                picks_to_update.len()
-            );
-            if let Err(e) = self
-                .token_repository
-                .update_token_picks(picks_to_update.values().cloned().collect())
-                .await
-            {
-                error!("Failed to update token picks: {}", e);
-            }
-        }
-
-        debug!("Successfully processed all token picks");
         Ok((pick_responses, total))
+    }
+
+    // New helper method to handle caching and processing for a single pick
+    async fn process_pick_with_cache(
+        &self,
+        pick: &TokenPick,
+        cache_key: String,
+    ) -> Result<TokenPickResponse, ApiError> {
+        // Try to get from cache first
+        if let Ok(Some(cached_pick)) = self
+            .redis_service
+            .get_cached::<TokenPickResponse>(&cache_key)
+            .await
+        {
+            return Ok(cached_pick);
+        }
+
+        // Process the pick if not in cache
+        let processed_pick = self.process_single_pick(pick).await?;
+
+        // Cache the processed pick
+        if let Err(e) = self
+            .redis_service
+            .set_cached(&cache_key, &processed_pick, 600)
+            .await
+        {
+            error!("Failed to cache individual token pick {}: {}", pick.id, e);
+        }
+
+        Ok(processed_pick)
+    }
+
+    async fn process_single_pick(&self, pick: &TokenPick) -> Result<TokenPickResponse, ApiError> {
+        let latest_prices = self
+            .rust_monorepo_service
+            .get_latest_w_metadata(vec![pick.token.address.clone()])
+            .await?;
+
+        let latest_price = latest_prices
+            .get(&pick.token.address)
+            .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
+
+        // if !TokenPick::is_qualified(
+        //     latest_price.metadata.mc.unwrap_or_default(),
+        //     latest_price.metadata.liquidity,
+        //     latest_price.metadata.v_24h_usd,
+        // ) {
+        //     warn!("Token {} is not qualified", pick.token.symbol);
+        // }
+
+        let current_market_cap = latest_price.metadata.mc.unwrap_or_default();
+
+        // Check if we need to update the highest market cap
+        if current_market_cap > pick.highest_market_cap.unwrap_or_default() {
+            debug!(
+                "Updating highest market cap for token pick {}. Old: {}, New: {}",
+                pick.id,
+                pick.highest_market_cap.unwrap_or_default(),
+                current_market_cap
+            );
+
+            // Update in database
+            // self.token_repository
+            //     .update_highest_market_cap(pick.id, current_market_cap)
+            //     .await
+            //     .map_err(ApiError::from)?;
+        }
+
+        // let ohlcv = self
+        //     .birdeye_service
+        //     .get_ohlcv_request(
+        //         &pick.token.chain,
+        //         &pick.token.address,
+        //         pick.call_date.timestamp(),
+        //         Utc::now().timestamp(),
+        //         "15m",
+        //     )
+        //     .await?;
+
+        let mut pick_response = TokenPickResponse::from(pick.clone());
+        pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
+        pick_response.current_market_cap = current_market_cap.round_dp(2);
+        pick_response.highest_mc_post_call =
+            Some(current_market_cap.max(pick.highest_market_cap.unwrap_or_default()));
+        pick_response.highest_mult_post_call =
+            calculate_return(&pick.market_cap_at_call, &current_market_cap)
+                .round_dp(2)
+                .to_string()
+                .parse::<f32>()
+                .unwrap_or_default();
+
+        Ok(pick_response)
     }
 
     pub async fn save_token_pick(&self, pick: TokenPickRequest) -> Result<TokenPick, ApiError> {
@@ -316,6 +334,7 @@ impl TokenService {
                 order_direction: query.order_direction,
                 get_all: query.get_all,
                 group_ids: Some(groups.iter().map(|g| g.id).collect()),
+                picked_after: None,
             })
             .await
             .map_err(ApiError::from)?;

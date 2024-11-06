@@ -12,13 +12,13 @@ pub struct Profile;
 #[serde(rename_all = "camelCase")]
 pub struct ProfilePickSummary {
     /// The sum total of all of a user's picks expressed as an integer.
-    total_picks: i32,
+    pub total_picks: i32,
     /// Percentage of the user's picks that have achieved a return of 2x or more since they were made.
-    hit_rate: Decimal,
+    pub hit_rate: Decimal,
     /// Total returns of a user's picks expressed as a multiple.
-    pick_returns: Decimal,
+    pub pick_returns: Decimal,
     /// Total realized PnL for that user's Bullpen wallet expressed as a dollar amount.
-    realized_profit: Decimal,
+    pub realized_profit: Decimal,
 }
 
 impl From<UserStats> for ProfilePickSummary {

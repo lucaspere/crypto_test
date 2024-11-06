@@ -1,11 +1,15 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use chrono::Utc;
+use futures::future::join_all;
 use rust_decimal::{prelude::One, Decimal};
 use tracing::info;
 
 use crate::{
-    apis::token_handlers::TokenQuery,
+    apis::{
+        profile_handlers::{LeaderboardQuery, LeaderboardResponse, LeaderboardSort, ProfileQuery},
+        token_handlers::TokenQuery,
+    },
     external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
@@ -49,27 +53,117 @@ impl ProfileService {
         }
     }
 
-    pub async fn get_profile(&self, username: &str) -> Result<ProfileDetailsResponse, ApiError> {
+    pub async fn get_profile(
+        &self,
+        params: ProfileQuery,
+    ) -> Result<ProfileDetailsResponse, ApiError> {
+        info!(
+            "Attempting to fetch profile for username: {}",
+            params.username
+        );
+        let cache_key = format!(
+            "profile:{}:{}",
+            params.username,
+            params.picked_after.to_string()
+        );
+        if let Some(cached_response) = self
+            .redis_service
+            .get_cached::<ProfileDetailsResponse>(&cache_key)
+            .await?
+        {
+            info!("Cache hit for profile: {}", params.username);
+            return Ok(cached_response);
+        }
+
+        info!(
+            "Cache miss, fetching profile from database for username: {}",
+            params.username
+        );
         let user = self
             .user_repository
-            .find_by_username(username)
+            .find_by_username(&params.username)
             .await?
             .ok_or(ApiError::UserNotFound)?;
+        info!(
+            "User found, fetching user picks and stats for username: {}",
+            params.username
+        );
         let (_, stats) = self
             .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
-                username: username.to_string(),
-                ..Default::default()
+                username: params.username.clone(),
+                picked_after: Some(params.picked_after.clone()),
+                multiplier: None,
             })
             .await?;
+
         let response = ProfileDetailsResponse {
             id: user.id,
-            username: username.to_string(),
-            name: username.to_string(),
+            username: params.username.clone(),
+            name: params.username.clone(),
             avatar_url: String::new(),
             pick_summary: ProfilePickSummary::from(stats),
             ..Default::default()
         };
+
+        info!("Setting cache for profile: {}", params.username);
+        self.redis_service
+            .set_cached::<ProfileDetailsResponse>(&cache_key, &response, CACHE_TTL_SECONDS)
+            .await?;
+
+        info!(
+            "Profile fetched successfully for username: {}",
+            params.username
+        );
         Ok(response)
+    }
+
+    pub async fn list_profiles(
+        &self,
+        params: &LeaderboardQuery,
+    ) -> Result<LeaderboardResponse, ApiError> {
+        info!("Listing profiles with params: {:?}", params);
+        let tokens = self
+            .token_service
+            .list_token_picks(TokenQuery {
+                get_all: Some(true),
+                picked_after: Some(params.picked_after.clone()),
+                ..Default::default()
+            })
+            .await?;
+
+        let unique_users = tokens
+            .0
+            .iter()
+            .map(|t| t.user.username.clone())
+            .collect::<HashSet<_>>();
+        info!("Found {} unique users", unique_users.len());
+        let mut profiles = join_all(unique_users.iter().map(|username| {
+            let query = ProfileQuery {
+                username: username.clone(),
+                picked_after: params.picked_after.clone(),
+            };
+            self.get_profile(query)
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+        info!("Fetched {} profiles", profiles.len());
+
+        profiles.sort_by(|a, b| match params.sort {
+            Some(LeaderboardSort::PickReturns) => b
+                .pick_summary
+                .pick_returns
+                .cmp(&a.pick_summary.pick_returns),
+            Some(LeaderboardSort::HitRate) => b.pick_summary.hit_rate.cmp(&a.pick_summary.hit_rate),
+            Some(LeaderboardSort::RealizedProfit) => b
+                .pick_summary
+                .realized_profit
+                .cmp(&a.pick_summary.realized_profit),
+            _ => a.username.cmp(&b.username),
+        });
+        info!("Sorted profiles");
+
+        Ok(LeaderboardResponse { profiles })
     }
 
     pub async fn get_user_picks_and_stats(
@@ -81,6 +175,7 @@ impl ProfileService {
         let paramsx = TokenQuery {
             username: Some(params.username.clone()),
             get_all: Some(true),
+            picked_after: params.picked_after.clone(),
             ..Default::default()
         };
 

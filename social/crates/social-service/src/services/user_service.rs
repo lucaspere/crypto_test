@@ -67,4 +67,9 @@ impl UserService {
         let followers = self.user_repository.list_followers(user_id).await?;
         Ok(followers.into_iter().map(UserResponse::from).collect())
     }
+
+    pub async fn list_users(&self) -> Result<Vec<UserResponse>, sqlx::Error> {
+        let users = self.user_repository.list_users().await?;
+        Ok(users.into_iter().map(UserResponse::from).collect())
+    }
 }

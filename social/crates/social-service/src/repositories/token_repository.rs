@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, FixedOffset};
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -25,6 +27,7 @@ impl TokenRepository {
 #[derive(Debug, sqlx::FromRow, Default)]
 pub struct ListTokenPicksParams {
     pub user_id: Option<Uuid>,
+    pub picked_after: Option<DateTime<FixedOffset>>,
     pub page: u32,
     pub limit: u32,
     pub order_by: Option<String>,
@@ -81,17 +84,35 @@ impl TokenRepository {
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
+            WHERE 1=1
         "#
         .to_string();
 
-        let mut where_clause = String::new();
+        let mut where_clauses = Vec::new();
+        let mut bind_values = Vec::new();
+        let mut bind_idx = 1;
+
         if let Some(params) = params {
-            if let Some(_user_id) = params.user_id {
-                where_clause = " WHERE tp.user_id = $1".to_string();
+            // Add picked_after condition if present
+            if let Some(picked_after) = params.picked_after {
+                where_clauses.push(format!("tp.call_date >= ${}", bind_idx));
+                bind_values.push(QueryValue::Timestamp(picked_after));
+                bind_idx += 1;
+            }
+
+            // Add user_id condition if present
+            if let Some(user_id) = params.user_id {
+                where_clauses.push(format!("tp.user_id = ${}", bind_idx));
+                bind_values.push(QueryValue::Uuid(user_id));
+                bind_idx += 1;
             }
         }
 
-        base_query += &where_clause;
+        // Add where clauses to base query
+        if !where_clauses.is_empty() {
+            base_query += " AND ";
+            base_query += &where_clauses.join(" AND ");
+        }
 
         // Count query
         let count_query = format!("SELECT COUNT(*) FROM ({}) AS filtered", base_query);
@@ -114,21 +135,23 @@ impl TokenRepository {
 
         let mut tx = self.db.begin().await?;
 
-        // Execute count query
+        // Execute count query with bindings
         let mut count_builder = sqlx::query_scalar(&count_query);
-        if let Some(params) = params {
-            if let Some(user_id) = params.user_id {
-                count_builder = count_builder.bind(user_id);
-            }
+        for value in &bind_values {
+            count_builder = match value {
+                QueryValue::Timestamp(ts) => count_builder.bind(ts),
+                QueryValue::Uuid(uuid) => count_builder.bind(uuid),
+            };
         }
         let total: i64 = count_builder.fetch_one(&mut *tx).await?;
 
-        // Execute main query
+        // Execute main query with bindings
         let mut query_builder = sqlx::query_as::<_, TokenPick>(&base_query);
-        if let Some(params) = params {
-            if let Some(user_id) = params.user_id {
-                query_builder = query_builder.bind(user_id);
-            }
+        for value in &bind_values {
+            query_builder = match value {
+                QueryValue::Timestamp(ts) => query_builder.bind(ts),
+                QueryValue::Uuid(uuid) => query_builder.bind(uuid),
+            };
         }
 
         let picks = query_builder.fetch_all(&mut *tx).await?;
@@ -341,9 +364,35 @@ impl TokenRepository {
 
     //         Ok((picks, total))
     //     }
+
+    pub async fn update_highest_market_cap(
+        &self,
+        pick_id: i64,
+        new_highest_market_cap: Decimal,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+			UPDATE social.token_picks
+			SET highest_market_cap = $1
+			WHERE id = $2
+			"#,
+            new_highest_market_cap.round_dp(8),
+            pick_id
+        )
+        .execute(self.db.as_ref())
+        .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
 struct From {
     id: i64,
+}
+
+// Helper enum for query parameter binding
+enum QueryValue {
+    Timestamp(DateTime<FixedOffset>),
+    Uuid(Uuid),
 }
