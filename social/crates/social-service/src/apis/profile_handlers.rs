@@ -42,12 +42,13 @@ pub(super) async fn get_profile(
     Ok((StatusCode::OK, profile.into()))
 }
 
-#[derive(Deserialize, ToSchema, Debug, Clone, Serialize)]
+#[derive(Deserialize, ToSchema, Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TimeRange {
     Day,
     Week,
     Month,
+    #[default]
     Year,
 }
 
@@ -154,17 +155,20 @@ pub(super) async fn get_profile_picks_and_stats(
         Json(ProfilePicksAndStatsResponse { picks, stats }),
     ))
 }
-#[derive(Deserialize, Serialize, ToSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum LeaderboardSort {
+    #[default]
     PickReturns,
     HitRate,
     RealizedProfit,
 }
 
-#[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug)]
+#[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug, Default)]
 pub struct LeaderboardQuery {
+    #[serde(default)]
     pub sort: Option<LeaderboardSort>,
+    #[serde(default)]
     pub order: Option<String>,
     #[serde(default = "default_time_range")]
     pub picked_after: TimeRange,

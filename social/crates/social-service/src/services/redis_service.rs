@@ -1,10 +1,8 @@
-use redis::{aio::MultiplexedConnection, AsyncCommands, Client, RedisError};
+use redis::{aio::MultiplexedConnection, Client, RedisError};
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub struct RedisService {
-    connection: Arc<Mutex<MultiplexedConnection>>,
+    connection: MultiplexedConnection,
 }
 
 impl RedisService {
@@ -12,17 +10,18 @@ impl RedisService {
         let client = Client::open(redis_url)?;
         let connection = client.get_multiplexed_async_connection().await?;
 
-        Ok(Self {
-            connection: Arc::new(Mutex::new(connection)),
-        })
+        Ok(Self { connection })
     }
 
     pub async fn get_cached<T: DeserializeOwned>(
         &self,
         key: &str,
     ) -> Result<Option<T>, RedisError> {
-        let mut conn = self.connection.lock().await;
-        let result: Option<String> = conn.get(key).await?;
+        let mut connection = self.connection.clone();
+        let result: Option<String> = redis::cmd("GET")
+            .arg(key)
+            .query_async(&mut connection)
+            .await?;
 
         match result {
             Some(data) => Ok(serde_json::from_str(&data).ok()),
@@ -36,7 +35,6 @@ impl RedisService {
         value: &T,
         ttl_seconds: u64,
     ) -> Result<(), RedisError> {
-        let mut conn = self.connection.lock().await;
         let serialized = serde_json::to_string(value).map_err(|e| {
             RedisError::from((
                 redis::ErrorKind::InvalidClientConfig,
@@ -44,12 +42,39 @@ impl RedisService {
                 e.to_string(),
             ))
         })?;
-
-        conn.set_ex(key, serialized, ttl_seconds).await
+        let mut connection = self.connection.clone();
+        redis::cmd("SET")
+            .arg(key)
+            .arg(&serialized)
+            .arg("EX")
+            .arg(ttl_seconds)
+            .query_async(&mut connection)
+            .await?;
+        Ok(())
     }
 
     pub async fn delete_cached(&self, key: &str) -> Result<(), RedisError> {
-        let mut conn = self.connection.lock().await;
-        conn.del(key).await
+        let mut connection = self.connection.clone();
+        redis::cmd("DEL")
+            .arg(key)
+            .query_async(&mut connection)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_pattern(&self, pattern: &str) -> Result<(), RedisError> {
+        let mut connection = self.connection.clone();
+        let keys: Vec<String> = redis::cmd("KEYS")
+            .arg(pattern)
+            .query_async(&mut connection)
+            .await?;
+
+        if !keys.is_empty() {
+            redis::cmd("DEL")
+                .arg(keys)
+                .query_async(&mut connection)
+                .await?;
+        }
+        Ok(())
     }
 }
