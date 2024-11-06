@@ -13,6 +13,8 @@ use std::{collections::HashMap, sync::Arc};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+use super::profile_handlers::TimeRange;
+
 pub const TAG: &str = "token";
 
 #[derive(serde::Serialize, ToSchema)]
@@ -27,6 +29,7 @@ pub struct PaginatedTokenPickResponse {
 #[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct TokenQuery {
     pub username: Option<String>,
+    pub picked_after: Option<TimeRange>,
     #[param(default = 1)]
     pub page: u32,
     #[param(default = 10)]

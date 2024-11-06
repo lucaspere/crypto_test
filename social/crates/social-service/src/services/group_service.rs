@@ -3,7 +3,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
-    apis::group_handlers::AddUserRequest,
+    apis::{
+        group_handlers::AddUserRequest,
+        profile_handlers::{ProfileQuery, TimeRange},
+    },
     models::groups::{CreateOrUpdateGroup, Group, GroupMembersResponse, GroupUser},
     repositories::group_repository::GroupRepository,
     utils::api_errors::ApiError,
@@ -123,11 +126,12 @@ impl GroupService {
             .await?;
 
         if let Some(profile_service) = &self.profile_service.as_ref() {
-            let profiles = join_all(
-                group_members
-                    .iter()
-                    .map(|g| profile_service.get_profile(&g.username)),
-            )
+            let profiles = join_all(group_members.iter().map(|g| {
+                profile_service.get_profile(ProfileQuery {
+                    username: g.username.clone(),
+                    picked_after: TimeRange::Year,
+                })
+            }))
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;

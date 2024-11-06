@@ -113,4 +113,15 @@ impl UserRepository {
         .fetch_all(self.db.as_ref())
         .await
     }
+
+    pub async fn list_users(&self) -> Result<Vec<User>, sqlx::Error> {
+        sqlx::query_as::<_, User>(
+            r#"
+            SELECT *
+            FROM public.user
+            "#,
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+    }
 }

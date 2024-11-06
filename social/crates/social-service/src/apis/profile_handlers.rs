@@ -12,9 +12,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, Duration, FixedOffset};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 pub const TAG: &str = "profile";
 
@@ -36,20 +37,53 @@ pub(super) async fn get_profile(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<ProfileQuery>,
 ) -> Result<(StatusCode, Json<ProfileDetailsResponse>), ApiError> {
-    let profile = app_state
-        .profile_service
-        .get_profile(&query.username)
-        .await?;
+    let profile = app_state.profile_service.get_profile(query).await?;
 
     Ok((StatusCode::OK, profile.into()))
 }
 
-#[derive(Deserialize, ToSchema, Debug)]
-pub struct ProfileQuery {
-    username: String,
+#[derive(Deserialize, ToSchema, Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeRange {
+    Day,
+    Week,
+    Month,
+    Year,
 }
 
-// #[utoipa::path(
+impl TimeRange {
+    pub fn to_date_time(&self, now: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
+        match self {
+            TimeRange::Day => now - Duration::days(1),
+            TimeRange::Week => now - Duration::weeks(1),
+            TimeRange::Month => now - Duration::days(30),
+            TimeRange::Year => now - Duration::days(365),
+        }
+    }
+}
+
+impl ToString for TimeRange {
+    fn to_string(&self) -> String {
+        match self {
+            TimeRange::Day => "day".to_string(),
+            TimeRange::Week => "week".to_string(),
+            TimeRange::Month => "month".to_string(),
+            TimeRange::Year => "year".to_string(),
+        }
+    }
+}
+
+#[derive(Deserialize, ToSchema, Debug, Clone)]
+pub struct ProfileQuery {
+    pub username: String,
+    #[serde(default = "default_time_range")]
+    pub picked_after: TimeRange,
+}
+
+fn default_time_range() -> TimeRange {
+    TimeRange::Year
+}
+
 //     get,
 //     tag = TAG,
 //     path = "/user-stats",
@@ -120,16 +154,41 @@ pub(super) async fn get_profile_picks_and_stats(
         Json(ProfilePicksAndStatsResponse { picks, stats }),
     ))
 }
+#[derive(Deserialize, Serialize, ToSchema, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardSort {
+    PickReturns,
+    HitRate,
+    RealizedProfit,
+}
 
-// #[derive(Deserialize, Serialize, ToSchema)]
-// pub struct LeaderboardQuery {
-//     page: i64,
-//     limit: i64,
-// }
+#[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug)]
+pub struct LeaderboardQuery {
+    pub sort: Option<LeaderboardSort>,
+    pub order: Option<String>,
+    #[serde(default = "default_time_range")]
+    pub picked_after: TimeRange,
+}
 
-// pub(super) async fn leaderboard(
-//     State(app_state): State<Arc<AppState>>,
-//     Query(params): Query<LeaderboardQuery>,
-// ) -> Result<(StatusCode, Json<LeaderboardResponse>), ApiError> {
-//     StatusCode::OK.into_response()
-// }
+#[derive(Serialize, ToSchema)]
+pub struct LeaderboardResponse {
+    pub profiles: Vec<ProfileDetailsResponse>,
+}
+
+#[utoipa::path(
+    get,
+    tag = TAG,
+    path = "/leaderboard",
+    responses(
+        (status = 200, description = "Leaderboard", body = LeaderboardResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    params(LeaderboardQuery)
+)]
+pub(super) async fn leaderboard(
+    State(app_state): State<Arc<AppState>>,
+    Query(params): Query<LeaderboardQuery>,
+) -> Result<(StatusCode, Json<LeaderboardResponse>), ApiError> {
+    let leaderboard = app_state.profile_service.list_profiles(&params).await?;
+    Ok((StatusCode::OK, leaderboard.into()))
+}

@@ -1,3 +1,5 @@
+use crate::apis::profile_handlers::TimeRange;
+
 use super::{
     tokens::Token,
     users::{User, UserResponse},
@@ -147,6 +149,7 @@ impl From<TokenPick> for TokenPickResponse {
 pub struct ProfilePicksAndStatsQuery {
     pub username: String,
     pub multiplier: Option<u8>,
+    pub picked_after: Option<TimeRange>,
 }
 
 #[cfg(test)]
