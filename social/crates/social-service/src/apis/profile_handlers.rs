@@ -79,6 +79,7 @@ pub struct ProfileQuery {
     pub username: String,
     #[serde(default = "default_time_range")]
     pub picked_after: TimeRange,
+    pub group_id: Option<i64>,
 }
 
 fn default_time_range() -> TimeRange {

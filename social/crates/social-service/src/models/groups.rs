@@ -41,8 +41,8 @@ impl From<Group> for GroupResponse {
             created_at: group.created_at,
             total_token_pick: group.token_pick_count,
             total_users: group.user_count,
-            total_pick_returns: group.total_returns,
-            hit_rate: group.hit_rate,
+            total_pick_returns: (group.total_returns * 100.0).round() / 100.0,
+            hit_rate: (group.hit_rate * 100.0).round() / 100.0,
             realized_profit: 0,
         }
     }

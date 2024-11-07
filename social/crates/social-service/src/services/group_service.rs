@@ -130,6 +130,7 @@ impl GroupService {
                 profile_service.get_profile(ProfileQuery {
                     username: g.username.clone(),
                     picked_after: TimeRange::Year,
+                    group_id: Some(group_id),
                 })
             }))
             .await
