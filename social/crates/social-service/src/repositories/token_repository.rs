@@ -323,49 +323,6 @@ impl TokenRepository {
         Ok(token_pick.unwrap_or_default())
     }
 
-    //     pub async fn list_token_picks_by_group(
-    //         &self,
-    //         params: Option<&ListTokenPicksParams>,
-    //     ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
-    //         let mut base_query = r#"
-    //             SELECT tp.*,
-    //                    row_to_json(t) AS token,
-    //                    row_to_json(u) AS user,
-    //                    row_to_json(g) AS group
-    //             FROM social.token_picks tp
-    //             JOIN social.tokens t ON tp.token_address = t.address
-    //             JOIN public.user u ON tp.user_id = u.id
-    //             JOIN social.groups g ON tp.group_id = g.id
-    //         "#
-    //         .to_string();
-
-    //         let mut where_clause = Vec::new();
-    //         let mut bind_idx = 1;
-    //         let mut bindings = Vec::new();
-
-    //         if let Some(params) = params {
-    //             if let Some(user_id) = params.user_id {
-    //                 where_clause.push(format!("tp.user_id = ${}", bind_idx));
-    //                 bind_idx += 1;
-    //                 bindings.push(user_id);
-    //             }
-    //             if let Some(group_id) = params.group_id {
-    //                 where_clause.push(format!("tp.group_id = ${}", bind_idx));
-    //                 bindings.push(group_id);
-    //             }
-    //         }
-
-    //         if !where_clause.is_empty() {
-    //             base_query += " WHERE ";
-    //             base_query += &where_clause.join(" AND ");
-    //         }
-
-    //         // Rest of the implementation similar to list_token_picks
-    //         // ... (pagination, ordering, etc.)
-
-    //         Ok((picks, total))
-    //     }
-
     pub async fn update_highest_market_cap(
         &self,
         pick_id: i64,
