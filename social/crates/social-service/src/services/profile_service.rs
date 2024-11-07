@@ -69,13 +69,13 @@ impl ProfileService {
                 .group_id
                 .map_or(String::new(), |id| format!(":{}", id))
         );
-        if let Some(cached_response) = self
-            .redis_service
-            .get_cached::<ProfileDetailsResponse>(&cache_key)
-            .await?
-        {
-            return Ok(cached_response);
-        }
+        // if let Some(cached_response) = self
+        //     .redis_service
+        //     .get_cached::<ProfileDetailsResponse>(&cache_key)
+        //     .await?
+        // {
+        //     return Ok(cached_response);
+        // }
 
         info!(
             "Cache miss, fetching profile from database for username: {}",
@@ -95,7 +95,7 @@ impl ProfileService {
                 username: params.username.clone(),
                 picked_after: Some(params.picked_after.clone()),
                 multiplier: None,
-                group_ids: Some(vec![params.group_id.unwrap_or_default()]),
+                group_ids: params.group_id.map(|id| vec![id]),
             })
             .await?;
 
