@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     apis::{
-        group_handlers::AddUserRequest,
+        group_handlers::{AddUserRequest, ListGroupsQuery},
         profile_handlers::{ProfileQuery, TimeRange},
     },
     models::groups::{CreateOrUpdateGroup, Group, GroupMembersResponse, GroupUser},
@@ -53,9 +53,9 @@ impl GroupService {
             .map_err(|e| ApiError::DatabaseError(e))
     }
 
-    pub async fn list_groups(&self) -> Result<Vec<Group>, ApiError> {
+    pub async fn list_groups(&self, query: &ListGroupsQuery) -> Result<Vec<Group>, ApiError> {
         self.repository
-            .list_groups()
+            .list_groups(query)
             .await
             .map_err(|e| ApiError::DatabaseError(e))
     }

@@ -341,7 +341,7 @@ impl TokenService {
 
             self.group_service.get_user_groups(user.id).await?
         } else if let Some(group_ids) = query.group_ids {
-            let groups = self.group_service.list_groups().await?;
+            let groups = self.group_service.list_groups(&Default::default()).await?;
             groups
                 .into_iter()
                 .filter(|g| group_ids.contains(&g.id))
@@ -370,6 +370,7 @@ impl TokenService {
         debug!("Fetched {:?} token picks", picks);
         let group_hash: HashMap<i64, &CreateOrUpdateGroup> =
             groups.iter().map(|g| (g.id, g)).collect();
+        dbg!(&picks.len());
         let map_group_id: HashMap<String, Vec<TokenPickResponse>> =
             picks.iter().fold(HashMap::new(), |mut acc, pick| {
                 if let Some(group) = group_hash.get(&pick.group_id) {

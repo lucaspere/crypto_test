@@ -2,7 +2,10 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::models::groups::{CreateOrUpdateGroup, Group, GroupUser, GroupWithUsers};
+use crate::{
+    apis::group_handlers::ListGroupsQuery,
+    models::groups::{CreateOrUpdateGroup, Group, GroupUser, GroupWithUsers},
+};
 
 pub struct GroupRepository {
     db: Arc<PgPool>,
@@ -136,9 +139,8 @@ impl GroupRepository {
         .await
     }
 
-    pub async fn list_groups(&self) -> Result<Vec<Group>, sqlx::Error> {
-        sqlx::query_as::<_, Group>(
-            r#"SELECT
+    pub async fn list_groups(&self, params: &ListGroupsQuery) -> Result<Vec<Group>, sqlx::Error> {
+        let mut query = r#"SELECT
                 g.id,
                 g.name,
                 g.logo_uri,
@@ -168,10 +170,20 @@ impl GroupRepository {
                 SELECT group_id, COUNT(DISTINCT user_id) as user_count
                 FROM social.group_users
                 GROUP BY group_id
-            ) gu_count ON g.id = gu_count.group_id"#,
-        )
-        .fetch_all(self.db.as_ref())
-        .await
+            ) gu_count ON g.id = gu_count.group_id
+        "#
+        .to_string();
+
+        if let Some(_user_id) = params.user_id {
+            query.push_str(
+                " WHERE g.id IN (SELECT group_id FROM social.group_users WHERE user_id = $1)",
+            );
+        }
+
+        sqlx::query_as::<_, Group>(&query)
+            .bind(params.user_id)
+            .fetch_all(self.db.as_ref())
+            .await
     }
 
     pub async fn list_group_members(
