@@ -41,37 +41,47 @@ impl GroupRepository {
     pub async fn get_group(&self, id: i64) -> Result<Option<Group>, sqlx::Error> {
         sqlx::query_as::<_, Group>(
             r#"
+            WITH token_pick_stats AS (
+                SELECT
+                    group_id,
+                    COUNT(*) as total_picks,
+                    COUNT(CASE WHEN hit_date IS NOT NULL THEN 1 END) as hits,
+                    SUM(
+                        CASE
+                            WHEN highest_market_cap IS NOT NULL
+                                AND market_cap_at_call > 0
+                            THEN (highest_market_cap::float / market_cap_at_call::float) - 1
+                            ELSE 0
+                        END
+                    ) as total_returns
+                FROM social.token_picks
+                GROUP BY group_id
+            ),
+            group_user_counts AS (
+                SELECT
+                    group_id,
+                    COUNT(DISTINCT user_id) as user_count
+                FROM social.group_users
+                GROUP BY group_id
+            )
             SELECT
                 g.id,
                 g.name,
                 g.logo_uri,
                 g.created_at,
-                COALESCE(tp_count.total_picks, 0) as token_pick_count,
-                COALESCE(gu_count.user_count, 0) as user_count,
-                CASE
-                    WHEN COALESCE(tp_count.total_picks, 0) = 0 THEN 0
-                    ELSE COALESCE(tp_count.hits::float / tp_count.total_picks::float, 0)
-                END as hit_rate,
-                COALESCE(tp_count.total_returns, 0) as total_returns
-            FROM social.groups g
-            LEFT JOIN (
-                SELECT
-                    group_id,
-                    COUNT(*) as total_picks,
-                    SUM(CASE WHEN hit_date IS NOT NULL THEN 1 ELSE 0 END) as hits,
-                    SUM(CASE
-                        WHEN highest_market_cap IS NOT NULL AND market_cap_at_call > 0
-                        THEN highest_market_cap::float / market_cap_at_call::float
+                COALESCE(tp.total_picks, 0) as token_pick_count,
+                COALESCE(gu.user_count, 0) as user_count,
+                COALESCE(
+                    CASE
+                        WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float
                         ELSE 0
-                    END) as total_returns
-                FROM social.token_picks
-                GROUP BY group_id
-            ) tp_count ON g.id = tp_count.group_id
-            LEFT JOIN (
-                SELECT group_id, COUNT(DISTINCT user_id) as user_count
-                FROM social.group_users
-                GROUP BY group_id
-            ) gu_count ON g.id = gu_count.group_id
+                    END,
+                    0
+                ) as hit_rate,
+                COALESCE(tp.total_returns, 0) as total_returns
+            FROM social.groups g
+            LEFT JOIN token_pick_stats tp ON g.id = tp.group_id
+            LEFT JOIN group_user_counts gu ON g.id = gu.group_id
             WHERE g.id = $1
             "#,
         )
@@ -140,37 +150,47 @@ impl GroupRepository {
     }
 
     pub async fn list_groups(&self, params: &ListGroupsQuery) -> Result<Vec<Group>, sqlx::Error> {
-        let mut query = r#"SELECT
+        let mut query = r#"WITH token_pick_stats AS (
+                SELECT
+                    group_id,
+                    COUNT(*) as total_picks,
+                    COUNT(CASE WHEN hit_date IS NOT NULL THEN 1 END) as hits,
+                    SUM(
+                        CASE
+                            WHEN highest_market_cap IS NOT NULL
+                                AND market_cap_at_call > 0
+                            THEN (highest_market_cap::float / market_cap_at_call::float) - 1
+                            ELSE 0
+                        END
+                    ) as total_returns
+                FROM social.token_picks
+                GROUP BY group_id
+            ),
+            group_user_counts AS (
+                SELECT
+                    group_id,
+                    COUNT(DISTINCT user_id) as user_count
+                FROM social.group_users
+                GROUP BY group_id
+            )
+            SELECT
                 g.id,
                 g.name,
                 g.logo_uri,
                 g.created_at,
-                COALESCE(tp_count.total_picks, 0) as token_pick_count,
-                COALESCE(gu_count.user_count, 0) as user_count,
-                CASE
-                    WHEN COALESCE(tp_count.total_picks, 0) = 0 THEN 0
-                    ELSE COALESCE(tp_count.hits::float / tp_count.total_picks::float, 0)
-                END as hit_rate,
-                COALESCE(tp_count.total_returns, 0) as total_returns
-            FROM social.groups g
-            LEFT JOIN (
-                SELECT
-                    group_id,
-                    COUNT(*) as total_picks,
-                    SUM(CASE WHEN hit_date IS NOT NULL THEN 1 ELSE 0 END) as hits,
-                    SUM(CASE
-                        WHEN highest_market_cap IS NOT NULL AND market_cap_at_call > 0
-                        THEN highest_market_cap::float / market_cap_at_call::float
+                COALESCE(tp.total_picks, 0) as token_pick_count,
+                COALESCE(gu.user_count, 0) as user_count,
+                COALESCE(
+                    CASE
+                        WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float
                         ELSE 0
-                    END) as total_returns
-                FROM social.token_picks
-                GROUP BY group_id
-            ) tp_count ON g.id = tp_count.group_id
-            LEFT JOIN (
-                SELECT group_id, COUNT(DISTINCT user_id) as user_count
-                FROM social.group_users
-                GROUP BY group_id
-            ) gu_count ON g.id = gu_count.group_id
+                    END,
+                    0
+                ) as hit_rate,
+                COALESCE(tp.total_returns, 0) as total_returns
+            FROM social.groups g
+            LEFT JOIN token_pick_stats tp ON g.id = tp.group_id
+            LEFT JOIN group_user_counts gu ON g.id = gu.group_id
         "#
         .to_string();
 
