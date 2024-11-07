@@ -130,6 +130,7 @@ impl ProfileService {
             .list_token_picks(TokenQuery {
                 get_all: Some(true),
                 picked_after: Some(params.picked_after.clone()),
+                group_ids: params.group_id.map(|id| vec![id]),
                 ..Default::default()
             })
             .await?;
@@ -144,7 +145,7 @@ impl ProfileService {
             let query = ProfileQuery {
                 username: username.clone(),
                 picked_after: params.picked_after.clone(),
-                group_id: None,
+                group_id: params.group_id,
             };
             self.get_profile(query)
         }))
@@ -163,6 +164,9 @@ impl ProfileService {
                 .pick_summary
                 .realized_profit
                 .cmp(&a.pick_summary.realized_profit),
+            Some(LeaderboardSort::TotalPicks) => {
+                b.pick_summary.total_picks.cmp(&a.pick_summary.total_picks)
+            }
             _ => a.username.cmp(&b.username),
         });
         info!("Sorted profiles");

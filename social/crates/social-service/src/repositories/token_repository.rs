@@ -104,7 +104,6 @@ impl TokenRepository {
             if let Some(user_id) = params.user_id {
                 where_clauses.push(format!("tp.user_id = ${}", bind_idx));
                 bind_values.push(QueryValue::Uuid(user_id));
-                bind_idx += 1;
             }
         }
 
