@@ -152,20 +152,3 @@ pub struct ProfilePicksAndStatsQuery {
     pub picked_after: Option<TimeRange>,
     pub group_ids: Option<Vec<i64>>,
 }
-
-#[cfg(test)]
-mod tests {
-    // #[test]
-    // fn test_check_for_hit() {
-    //     let mut pick = TokenPick::new();
-    //     pick.market_cap_at_call = Some(Decimal::from_f32(100_000_000.0).unwrap());
-    //     assert_eq!(
-    //         pick.check_for_hit(Decimal::from_f32(200_000_000.0).unwrap()),
-    //         true
-    //     );
-    //     assert_eq!(
-    //         pick.check_for_hit(Decimal::from_f32(199_000_000.0).unwrap()),
-    //         false
-    //     );
-    // }
-}
