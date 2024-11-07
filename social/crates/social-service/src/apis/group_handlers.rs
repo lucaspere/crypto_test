@@ -10,7 +10,10 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    models::groups::{CreateOrUpdateGroup, GroupMembersResponse, GroupResponse, GroupUser},
+    models::{
+        groups::{CreateOrUpdateGroup, GroupResponse, GroupUser},
+        profiles::ProfileDetailsResponse,
+    },
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
@@ -167,9 +170,8 @@ pub struct GroupMembersQuery {
 
 #[derive(serde::Serialize, ToSchema)]
 pub struct PaginatedGroupMembersResponse {
-    #[serde(flatten)]
-    pub items: GroupMembersResponse,
-    pub total: i64,
+    pub items: Vec<ProfileDetailsResponse>,
+    pub total: usize,
     pub page: u32,
     pub limit: u32,
     pub total_pages: u32,
@@ -192,16 +194,16 @@ pub(super) async fn get_group_members(
     let limit = query.limit;
     let page = query.page;
 
-    let members = app_state
+    let res = app_state
         .group_service
         .list_group_members(group_id, limit, page)
         .await?;
-    let total = members.members.len() as i64;
-    let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
+    let total = res.members.len();
+    let total_pages = ((res.total as f64) / (limit as f64)).ceil() as u32;
     Ok((
         StatusCode::OK,
         Json(PaginatedGroupMembersResponse {
-            items: members,
+            items: res.members,
             total,
             page,
             limit,
