@@ -179,18 +179,34 @@ impl GroupRepository {
         group_id: i64,
         limit: u32,
         page: u32,
-    ) -> Result<Vec<GroupWithUsers>, sqlx::Error> {
-        sqlx::query_as::<_, GroupWithUsers>(
-            r#"SELECT gu.*, u.username FROM social.group_users gu
+    ) -> Result<(Vec<GroupWithUsers>, i64), sqlx::Error> {
+        let offset = ((page - 1) * limit) as i64;
+
+        // Get total count first
+        let total = sqlx::query_scalar!(
+            r#"SELECT COUNT(DISTINCT gu.user_id)
+            FROM social.group_users gu
+            JOIN public.user u ON gu.user_id = u.id
+            WHERE gu.group_id = $1"#,
+            group_id
+        )
+        .fetch_one(self.db.as_ref())
+        .await?;
+
+        // Get paginated results
+        let members = sqlx::query_as::<_, GroupWithUsers>(
+            r#"SELECT DISTINCT ON (gu.user_id) gu.*, u.username FROM social.group_users gu
             JOIN public.user u ON gu.user_id = u.id
             WHERE gu.group_id = $1
-            ORDER BY gu.joined_at DESC
+            ORDER BY gu.user_id, gu.joined_at DESC
             LIMIT $2 OFFSET $3"#,
         )
         .bind(group_id)
         .bind(limit as i64)
-        .bind(((page - 1) * limit) as i64)
+        .bind(offset)
         .fetch_all(self.db.as_ref())
-        .await
+        .await?;
+
+        Ok((members, total.unwrap_or(0)))
     }
 }

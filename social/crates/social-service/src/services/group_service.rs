@@ -120,7 +120,7 @@ impl GroupService {
         limit: u32,
         page: u32,
     ) -> Result<GroupMembersResponse, ApiError> {
-        let group_members = self
+        let (group_members, total) = self
             .repository
             .list_group_members(group_id, limit, page)
             .await?;
@@ -137,7 +137,10 @@ impl GroupService {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
-            let group_members_response = GroupMembersResponse { members: profiles };
+            let group_members_response = GroupMembersResponse {
+                members: profiles,
+                total,
+            };
 
             Ok(group_members_response)
         } else {
