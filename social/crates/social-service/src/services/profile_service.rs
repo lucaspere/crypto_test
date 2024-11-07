@@ -62,16 +62,18 @@ impl ProfileService {
             params.username
         );
         let cache_key = format!(
-            "profile:{}:{}",
+            "profile:{}:{}{}",
             params.username,
-            params.picked_after.to_string()
+            params.picked_after.to_string(),
+            params
+                .group_id
+                .map_or(String::new(), |id| format!(":{}", id))
         );
         if let Some(cached_response) = self
             .redis_service
             .get_cached::<ProfileDetailsResponse>(&cache_key)
             .await?
         {
-            info!("Cache hit for profile: {}", params.username);
             return Ok(cached_response);
         }
 
@@ -93,6 +95,7 @@ impl ProfileService {
                 username: params.username.clone(),
                 picked_after: Some(params.picked_after.clone()),
                 multiplier: None,
+                group_ids: Some(vec![params.group_id.unwrap_or_default()]),
             })
             .await?;
 
@@ -141,6 +144,7 @@ impl ProfileService {
             let query = ProfileQuery {
                 username: username.clone(),
                 picked_after: params.picked_after.clone(),
+                group_id: None,
             };
             self.get_profile(query)
         }))
@@ -176,6 +180,7 @@ impl ProfileService {
             username: Some(params.username.clone()),
             get_all: Some(true),
             picked_after: params.picked_after.clone(),
+            group_ids: params.group_ids.clone(),
             ..Default::default()
         };
 
@@ -185,7 +190,7 @@ impl ProfileService {
             info!("No picks found for user {}", params.username);
             return Ok((vec![], UserStats::default()));
         }
-
+        println!("{:#?}", &picks);
         info!("Found {} picks for user {}", picks.len(), params.username);
 
         let mut total_returns = Decimal::ZERO;

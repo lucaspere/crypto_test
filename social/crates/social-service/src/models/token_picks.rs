@@ -150,6 +150,7 @@ pub struct ProfilePicksAndStatsQuery {
     pub username: String,
     pub multiplier: Option<u8>,
     pub picked_after: Option<TimeRange>,
+    pub group_ids: Option<Vec<i64>>,
 }
 
 #[cfg(test)]

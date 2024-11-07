@@ -171,7 +171,8 @@ impl TokenRepository {
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
-            JOIN social.group_users gu ON tp.user_id = gu.user_id
+            JOIN social.group_users gu ON tp.group_id = gu.group_id
+            WHERE gu.user_id = tp.user_id
         "#
         .to_string();
 
@@ -179,17 +180,13 @@ impl TokenRepository {
         if let Some(params) = params {
             if let Some(group_ids) = &params.group_ids {
                 where_clause = format!(
-                    " WHERE gu.group_id IN ({})",
+                    " AND tp.group_id IN ({})",
                     group_ids
                         .iter()
                         .map(|id| id.to_string())
                         .collect::<Vec<String>>()
                         .join(",")
                 );
-                dbg!(format!(
-                    "Fetching token picks for group ids: {}",
-                    &where_clause
-                ));
             }
         }
 
