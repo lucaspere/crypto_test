@@ -2,7 +2,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rust_decimal::{prelude::One, Decimal};
+use rust_decimal::{
+    prelude::{One, Zero},
+    Decimal,
+};
 use tracing::info;
 
 use crate::{
@@ -219,7 +222,7 @@ impl ProfileService {
             let current_return = calculate_return(
                 &pick.market_cap_at_call,
                 &pick.highest_mc_post_call.unwrap_or_default(),
-            );
+            ) - Decimal::one();
             total_returns += current_return;
 
             let new_best = BestPick {
@@ -279,7 +282,7 @@ impl ProfileService {
 
 fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
     if market_cap_at_call.is_zero() || highest_market_cap.is_zero() {
-        Decimal::one()
+        Decimal::zero()
     } else {
         highest_market_cap / market_cap_at_call
     }
