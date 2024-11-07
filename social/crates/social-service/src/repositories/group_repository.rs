@@ -183,13 +183,13 @@ impl GroupRepository {
         let offset = ((page - 1) * limit) as i64;
 
         // Get total count first
-        let total = sqlx::query_scalar!(
+        let total: i64 = sqlx::query_scalar(
             r#"SELECT COUNT(DISTINCT gu.user_id)
             FROM social.group_users gu
             JOIN public.user u ON gu.user_id = u.id
             WHERE gu.group_id = $1"#,
-            group_id
         )
+        .bind(group_id)
         .fetch_one(self.db.as_ref())
         .await?;
 
@@ -207,6 +207,6 @@ impl GroupRepository {
         .fetch_all(self.db.as_ref())
         .await?;
 
-        Ok((members, total.unwrap_or(0)))
+        Ok((members, total))
     }
 }
