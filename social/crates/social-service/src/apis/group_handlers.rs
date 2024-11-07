@@ -81,6 +81,11 @@ pub(super) async fn get_group(
     Ok((StatusCode::OK, GroupResponse::from(group).into()))
 }
 
+#[derive(Debug, Deserialize, IntoParams, Default)]
+pub struct ListGroupsQuery {
+    pub user_id: Option<Uuid>,
+}
+
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
@@ -89,12 +94,14 @@ pub(super) async fn get_group(
         (status = 200, description = "Success", body = Vec<GroupResponse>),
         (status = 404, description = "Not Found", body = ErrorResponse),
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
-    )
+    ),
+    params(ListGroupsQuery)
 )]
 pub(super) async fn list_groups(
     State(app_state): State<Arc<AppState>>,
+    Query(query): Query<ListGroupsQuery>,
 ) -> Result<(StatusCode, Json<Vec<GroupResponse>>), ApiError> {
-    let groups = app_state.group_service.list_groups().await?;
+    let groups = app_state.group_service.list_groups(&query).await?;
 
     Ok((
         StatusCode::OK,
