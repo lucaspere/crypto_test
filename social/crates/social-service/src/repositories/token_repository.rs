@@ -141,6 +141,7 @@ impl TokenRepository {
             count_builder = match value {
                 QueryValue::Timestamp(ts) => count_builder.bind(ts),
                 QueryValue::Uuid(uuid) => count_builder.bind(uuid),
+                QueryValue::Int64Array(arr) => count_builder.bind(arr),
             };
         }
         let total: i64 = count_builder.fetch_one(&mut *tx).await?;
@@ -151,6 +152,7 @@ impl TokenRepository {
             query_builder = match value {
                 QueryValue::Timestamp(ts) => query_builder.bind(ts),
                 QueryValue::Uuid(uuid) => query_builder.bind(uuid),
+                QueryValue::Int64Array(arr) => query_builder.bind(arr),
             };
         }
 
@@ -171,31 +173,31 @@ impl TokenRepository {
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
-            JOIN social.group_users gu ON tp.group_id = gu.group_id
-            WHERE gu.user_id = tp.user_id
+            WHERE 1=1
         "#
         .to_string();
 
-        let mut where_clause = String::new();
+        let mut bind_values = Vec::new();
+        let mut bind_idx = 1;
+
+        // Build where clauses with proper parameter binding
         if let Some(params) = params {
             if let Some(group_ids) = &params.group_ids {
-                where_clause = format!(
-                    " AND tp.group_id IN ({})",
-                    group_ids
-                        .iter()
-                        .map(|id| id.to_string())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                );
+                base_query += &format!(" AND tp.group_id = ANY(${bind_idx})");
+                bind_values.push(QueryValue::Int64Array(group_ids.clone()));
+                bind_idx += 1;
+            }
+            if let Some(user_id) = params.user_id {
+                base_query += &format!(" AND tp.user_id = ${bind_idx}");
+                bind_values.push(QueryValue::Uuid(user_id));
+                bind_idx += 1;
             }
         }
-
-        base_query += &where_clause;
 
         // Count query
         let count_query = format!("SELECT COUNT(*) FROM ({}) AS filtered", base_query);
 
-        // Add ordering and pagination to main query
+        // Add ordering and pagination
         if let Some(params) = params {
             if let Some(order_by) = &params.order_by {
                 let direction = params.order_direction.as_deref().unwrap_or("ASC");
@@ -204,7 +206,6 @@ impl TokenRepository {
                 base_query += " ORDER BY call_date DESC";
             }
 
-            // Only apply pagination if get_all is false
             if !params.get_all {
                 let offset = (params.page - 1) * params.limit;
                 base_query += &format!(" LIMIT {} OFFSET {}", params.limit, offset);
@@ -213,21 +214,25 @@ impl TokenRepository {
 
         let mut tx = self.db.begin().await?;
 
-        // Execute count query
+        // Execute count query with bindings
         let mut count_builder = sqlx::query_scalar(&count_query);
-        if let Some(params) = params {
-            if let Some(user_id) = params.user_id {
-                count_builder = count_builder.bind(user_id);
-            }
+        for value in &bind_values {
+            count_builder = match value {
+                QueryValue::Uuid(uuid) => count_builder.bind(uuid),
+                QueryValue::Int64Array(arr) => count_builder.bind(arr),
+                _ => count_builder,
+            };
         }
         let total: i64 = count_builder.fetch_one(&mut *tx).await?;
 
-        // Execute main query
+        // Execute main query with bindings
         let mut query_builder = sqlx::query_as::<_, TokenPick>(&base_query);
-        if let Some(params) = params {
-            if let Some(user_id) = params.user_id {
-                query_builder = query_builder.bind(user_id);
-            }
+        for value in &bind_values {
+            query_builder = match value {
+                QueryValue::Uuid(uuid) => query_builder.bind(uuid),
+                QueryValue::Int64Array(arr) => query_builder.bind(arr),
+                _ => query_builder,
+            };
         }
 
         let picks = query_builder.fetch_all(&mut *tx).await?;
@@ -395,4 +400,5 @@ struct From {
 enum QueryValue {
     Timestamp(DateTime<FixedOffset>),
     Uuid(Uuid),
+    Int64Array(Vec<i64>),
 }
