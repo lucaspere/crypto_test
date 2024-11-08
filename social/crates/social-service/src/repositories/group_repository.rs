@@ -50,7 +50,7 @@ impl GroupRepository {
                         CASE
                             WHEN highest_market_cap IS NOT NULL
                                 AND market_cap_at_call > 0
-                            THEN (highest_market_cap::float / market_cap_at_call::float) - 1
+                            THEN (highest_market_cap::float / market_cap_at_call::float)
                             ELSE 0
                         END
                     ) as total_returns
@@ -159,7 +159,7 @@ impl GroupRepository {
                         CASE
                             WHEN highest_market_cap IS NOT NULL
                                 AND market_cap_at_call > 0
-                            THEN (highest_market_cap::float / market_cap_at_call::float) - 1
+                            THEN (highest_market_cap::float / market_cap_at_call::float)
                             ELSE 0
                         END
                     ) as total_returns

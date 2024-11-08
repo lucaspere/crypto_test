@@ -200,8 +200,8 @@ impl TokenService {
                 .await?;
 
             pick.highest_market_cap = Some(ohlcv.high);
-            let hit_2x = calculate_return(&pick.market_cap_at_call, &ohlcv.high) - Decimal::one()
-                >= Decimal::from(2);
+            let hit_2x =
+                calculate_return(&pick.market_cap_at_call, &ohlcv.high) >= Decimal::from(2);
             if hit_2x {
                 pick.hit_date = Some(Utc::now().into());
             }
@@ -219,9 +219,8 @@ impl TokenService {
 
             pick.highest_market_cap = Some(current_market_cap);
 
-            let hit_2x = calculate_return(&pick.market_cap_at_call, &current_market_cap)
-                - Decimal::one()
-                >= Decimal::from(2);
+            let hit_2x =
+                calculate_return(&pick.market_cap_at_call, &current_market_cap) >= Decimal::from(2);
             if hit_2x {
                 pick.hit_date = Some(Utc::now().into());
             }
