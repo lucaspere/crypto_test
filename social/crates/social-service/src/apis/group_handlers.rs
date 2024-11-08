@@ -5,20 +5,24 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
     models::{
-        groups::{CreateOrUpdateGroup, GroupResponse, GroupUser},
+        groups::{CreateOrUpdateGroup, GroupMembersResponse, GroupResponse, GroupUser},
         profiles::ProfileDetailsResponse,
     },
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
 
-use super::token_handlers::{PaginatedTokenPickResponse, TokenGroupQuery};
+use super::{
+    profile_handlers::LeaderboardSort,
+    token_handlers::{PaginatedTokenPickResponse, TokenGroupQuery},
+};
 
 pub const GROUP_TAG: &str = "group";
 
@@ -203,7 +207,7 @@ pub(super) async fn get_group_members(
 
     let res = app_state
         .group_service
-        .list_group_members(group_id, limit, page)
+        .list_group_members(group_id, limit, page, None)
         .await?;
     let total = res.members.len();
     let total_pages = ((res.total as f64) / (limit as f64)).ceil() as u32;
@@ -289,4 +293,48 @@ pub async fn remove_user_from_group(
         .await?;
 
     Ok((StatusCode::OK, group_user.into()))
+}
+
+#[derive(Deserialize, IntoParams, Default)]
+pub struct ListGroupMembersQuery {
+    pub sort: Option<LeaderboardSort>,
+    pub user_id: Uuid,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct LeaderboardGroupResponse(Vec<GroupMembersResponse>);
+
+#[utoipa::path(
+    get,
+    tag = GROUP_TAG,
+    path = "/leaderboard",
+    responses(
+        (status = 200, description = "Success", body = LeaderboardGroupResponse),
+    ),
+    params(ListGroupMembersQuery)
+)]
+pub(super) async fn leaderboard(
+    State(app_state): State<Arc<AppState>>,
+    Query(params): Query<ListGroupMembersQuery>,
+) -> Result<(StatusCode, Json<LeaderboardGroupResponse>), ApiError> {
+    let user_groups = app_state
+        .group_service
+        .get_user_groups(params.user_id)
+        .await?;
+
+    let group_members_responses = user_groups
+        .iter()
+        .map(|group| {
+            app_state
+                .group_service
+                .list_group_members(group.id, 0, 0, params.sort)
+        })
+        .collect::<Vec<_>>();
+
+    let groups = join_all(group_members_responses)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok((StatusCode::OK, Json(LeaderboardGroupResponse(groups))))
 }

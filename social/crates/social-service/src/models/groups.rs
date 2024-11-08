@@ -86,5 +86,7 @@ pub struct GroupUser {
 #[serde(rename_all = "camelCase")]
 pub struct GroupMembersResponse {
     pub members: Vec<ProfileDetailsResponse>,
+    pub group_name: String,
+    pub group_id: i64,
     pub total: i64,
 }

@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     apis::{
         group_handlers::{AddUserRequest, ListGroupsQuery},
-        profile_handlers::{ProfileQuery, TimeRange},
+        profile_handlers::{LeaderboardSort, ProfileQuery, TimeRange},
     },
     models::groups::{CreateOrUpdateGroup, Group, GroupMembersResponse, GroupUser},
     repositories::group_repository::GroupRepository,
@@ -119,10 +119,11 @@ impl GroupService {
         group_id: i64,
         limit: u32,
         page: u32,
+        sort: Option<LeaderboardSort>,
     ) -> Result<GroupMembersResponse, ApiError> {
-        let (group_members, total) = self
+        let (group_members, group_name, total) = self
             .repository
-            .list_group_members(group_id, limit, page)
+            .list_group_members(group_id, limit, page, sort.is_some())
             .await?;
 
         if let Some(profile_service) = &self.profile_service.as_ref() {
@@ -137,10 +138,32 @@ impl GroupService {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
-            let group_members_response = GroupMembersResponse {
+            let mut group_members_response = GroupMembersResponse {
                 members: profiles,
+                group_name,
+                group_id: group_id,
                 total,
             };
+
+            if let Some(sort) = sort {
+                group_members_response.members.sort_by(|a, b| match sort {
+                    LeaderboardSort::PickReturns => b
+                        .pick_summary
+                        .pick_returns
+                        .cmp(&a.pick_summary.pick_returns),
+                    LeaderboardSort::HitRate => {
+                        b.pick_summary.hit_rate.cmp(&a.pick_summary.hit_rate)
+                    }
+                    LeaderboardSort::RealizedProfit => b
+                        .pick_summary
+                        .realized_profit
+                        .cmp(&a.pick_summary.realized_profit),
+                    LeaderboardSort::TotalPicks => {
+                        b.pick_summary.total_picks.cmp(&a.pick_summary.total_picks)
+                    }
+                    _ => a.username.cmp(&b.username),
+                });
+            }
 
             Ok(group_members_response)
         } else {
