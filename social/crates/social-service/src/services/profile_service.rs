@@ -197,7 +197,6 @@ impl ProfileService {
             info!("No picks found for user {}", params.username);
             return Ok((vec![], UserStats::default()));
         }
-        println!("{:#?}", &picks);
         info!("Found {} picks for user {}", picks.len(), params.username);
 
         let mut total_returns = Decimal::ZERO;
