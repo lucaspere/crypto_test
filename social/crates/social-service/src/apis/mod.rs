@@ -52,8 +52,8 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
             group_handlers::remove_user_from_group
         ))
         .routes(routes!(group_handlers::get_group_members))
-        .routes(routes!(group_handlers::get_group_picks));
-
+        .routes(routes!(group_handlers::get_group_picks))
+        .routes(routes!(group_handlers::leaderboard));
     let user_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/users", user_router);
 
     let profile_router =

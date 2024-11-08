@@ -211,9 +211,8 @@ impl GroupRepository {
         group_id: i64,
         limit: u32,
         page: u32,
-    ) -> Result<(Vec<GroupWithUsers>, i64), sqlx::Error> {
-        let offset = ((page - 1) * limit) as i64;
-
+        get_all: bool,
+    ) -> Result<(Vec<GroupWithUsers>, String, i64), sqlx::Error> {
         // Get total count first
         let total: i64 = sqlx::query_scalar(
             r#"SELECT COUNT(DISTINCT gu.user_id)
@@ -225,20 +224,41 @@ impl GroupRepository {
         .fetch_one(self.db.as_ref())
         .await?;
 
-        // Get paginated results
-        let members = sqlx::query_as::<_, GroupWithUsers>(
-            r#"SELECT DISTINCT ON (gu.user_id) gu.*, u.username FROM social.group_users gu
+        // Base query without pagination
+        let base_query = r#"SELECT DISTINCT ON (gu.user_id) gu.*, u.username, g.name
+            FROM social.group_users gu
             JOIN public.user u ON gu.user_id = u.id
+            JOIN social.groups g ON gu.group_id = g.id
             WHERE gu.group_id = $1
-            ORDER BY gu.user_id, gu.joined_at DESC
-            LIMIT $2 OFFSET $3"#,
-        )
-        .bind(group_id)
-        .bind(limit as i64)
-        .bind(offset)
-        .fetch_all(self.db.as_ref())
-        .await?;
+            ORDER BY gu.user_id, gu.joined_at DESC"#;
 
-        Ok((members, total))
+        // Add pagination only if get_all is false
+        let query = if get_all {
+            base_query.to_string()
+        } else {
+            format!("{} LIMIT $2 OFFSET $3", base_query)
+        };
+
+        // Execute query based on get_all parameter
+        let members = if get_all {
+            sqlx::query_as::<_, GroupWithUsers>(&query)
+                .bind(group_id)
+                .fetch_all(self.db.as_ref())
+                .await?
+        } else {
+            sqlx::query_as::<_, GroupWithUsers>(&query)
+                .bind(group_id)
+                .bind(limit as i64)
+                .bind(((page - 1) * limit) as i64)
+                .fetch_all(self.db.as_ref())
+                .await?
+        };
+
+        let group_name = sqlx::query_scalar(r#"SELECT name FROM social.groups WHERE id = $1"#)
+            .bind(group_id)
+            .fetch_one(self.db.as_ref())
+            .await?;
+
+        Ok((members, group_name, total))
     }
 }
