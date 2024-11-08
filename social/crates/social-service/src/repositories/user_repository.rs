@@ -17,14 +17,40 @@ impl UserRepository {
         &self,
         telegram_user_id: i64,
     ) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>("SELECT * FROM public.user WHERE telegram_id = $1")
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        WHERE u.telegram_id = $1
+        GROUP BY u.id
+        "#;
+        sqlx::query_as::<_, User>(query)
             .bind(telegram_user_id)
             .fetch_optional(self.db.as_ref())
             .await
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>("SELECT * FROM public.user WHERE id = $1")
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        WHERE u.id = $1
+        GROUP BY u.id
+        "#;
+        sqlx::query_as::<_, User>(query)
             .bind(id)
             .fetch_optional(self.db.as_ref())
             .await
@@ -62,66 +88,111 @@ impl UserRepository {
     }
 
     pub async fn get_followers(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
-        let followers = sqlx::query_as::<_, User>(
-            r#"
-            SELECT u.id, u.username, u.telegram_id, u.created_at
-            FROM public.user u
-            INNER JOIN social.user_follows uf ON u.id = uf.follower_id
-            WHERE uf.followed_id = $1
-            "#,
-        )
-        .bind(user_id)
-        .fetch_all(self.db.as_ref())
-        .await?;
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        INNER JOIN social.user_follows uf ON u.id = uf.follower_id
+        WHERE uf.followed_id = $1
+        GROUP BY u.id
+        "#;
+
+        let followers = sqlx::query_as::<_, User>(&query)
+            .bind(user_id)
+            .fetch_all(self.db.as_ref())
+            .await?;
 
         Ok(followers)
     }
 
     pub async fn get_following(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
-        let following = sqlx::query_as::<_, User>(
-            r#"
-            SELECT u.id, u.username, u.telegram_id, u.created_at
-            FROM public.user u
-            INNER JOIN social.user_follows uf ON u.id = uf.followed_id
-            WHERE uf.follower_id = $1
-            "#,
-        )
-        .bind(user_id)
-        .fetch_all(self.db.as_ref())
-        .await?;
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        INNER JOIN social.user_follows uf ON u.id = uf.followed_id
+        WHERE uf.follower_id = $1
+        GROUP BY u.id
+        "#;
+
+        let following = sqlx::query_as::<_, User>(&query)
+            .bind(user_id)
+            .fetch_all(self.db.as_ref())
+            .await?;
 
         Ok(following)
     }
 
     pub async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>("SELECT * FROM public.user WHERE username = $1")
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        WHERE u.username = $1
+        GROUP BY u.id
+        "#;
+        let user = sqlx::query_as::<_, User>(query)
             .bind(username)
             .fetch_optional(self.db.as_ref())
-            .await
+            .await?;
+
+        Ok(user)
     }
 
     pub async fn list_followers(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>(
-            r#"
-            SELECT *
-            FROM public.user u
-            INNER JOIN social.user_follows uf ON u.id = uf.follower_id
-            WHERE uf.followed_id = $1
-            "#,
-        )
-        .bind(user_id)
-        .fetch_all(self.db.as_ref())
-        .await
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        INNER JOIN social.user_follows uf ON u.id = uf.follower_id
+        WHERE uf.followed_id = $1
+        GROUP BY u.id
+        "#;
+        sqlx::query_as::<_, User>(&query)
+            .bind(user_id)
+            .fetch_all(self.db.as_ref())
+            .await
     }
 
     pub async fn list_users(&self) -> Result<Vec<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>(
-            r#"
-            SELECT *
-            FROM public.user
-            "#,
-        )
-        .fetch_all(self.db.as_ref())
-        .await
+        let query = r#"
+        SELECT
+            u.*,
+            JSON_AGG(JSON_BUILD_OBJECT('chain', wac.chain_id, 'address', wa.address)) AS wallet_addresses
+        FROM
+            public.user u
+        LEFT JOIN
+            public.wallet_account wa ON u.selected_wallet_id = wa.wallet_id
+        LEFT JOIN
+            public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
+        GROUP BY u.id
+        "#;
+        sqlx::query_as::<_, User>(query)
+            .fetch_all(self.db.as_ref())
+            .await
     }
 }
