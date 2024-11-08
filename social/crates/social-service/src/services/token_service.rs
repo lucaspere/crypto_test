@@ -370,7 +370,6 @@ impl TokenService {
         debug!("Fetched {:?} token picks", picks);
         let group_hash: HashMap<i64, &CreateOrUpdateGroup> =
             groups.iter().map(|g| (g.id, g)).collect();
-        dbg!(&picks.len());
         let map_group_id: HashMap<String, Vec<TokenPickResponse>> =
             picks.iter().fold(HashMap::new(), |mut acc, pick| {
                 if let Some(group) = group_hash.get(&pick.group_id) {
