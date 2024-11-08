@@ -1,8 +1,14 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
+use axum::{http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{types::Json, FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct WalletWithChain {
+    pub address: Option<String>,
+    pub chain: Option<String>,
+}
 
 #[derive(Clone, Debug, PartialEq, FromRow, Serialize, Deserialize, Default)]
 pub struct User {
@@ -12,6 +18,7 @@ pub struct User {
     pub selected_wallet_id: Option<Uuid>,
     // pub accepted_tos: Option<DateTime<Utc>>,
     pub waitlisted: bool,
+    pub wallet_addresses: Option<Json<Vec<WalletWithChain>>>,
     // pub accepted_insights_risk: Option<DateTime<Utc>>,
     // pub created_at: Option<DateTime<Utc>>,
 }
@@ -42,6 +49,6 @@ impl From<User> for UserResponse {
 
 impl IntoResponse for UserResponse {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::OK, Json(self)).into_response()
+        (StatusCode::OK, axum::Json(self)).into_response()
     }
 }

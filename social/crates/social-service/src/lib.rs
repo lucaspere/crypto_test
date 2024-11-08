@@ -2,7 +2,9 @@
 
 use apis::setup_routes;
 use axum::Router;
-use external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService};
+use external_services::{
+    birdeye::BirdeyeService, cielo::CieloService, rust_monorepo::RustMonorepoService,
+};
 use repositories::{
     group_repository::GroupRepository, token_repository::TokenRepository,
     user_repository::UserRepository,
@@ -76,6 +78,10 @@ pub async fn setup_services(
         Arc::new(None),
     ));
     let birdeye_service = Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone()));
+    let cielo_service = Arc::new(CieloService::new(
+        settings.cielo_api_key.clone(),
+        redis_service.clone(),
+    ));
     let rust_monorepo = Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
     let token_service = TokenService::new(
         token_repository.clone(),
@@ -93,6 +99,7 @@ pub async fn setup_services(
         birdeye_service,
         redis_service.clone(),
         token_service.clone(),
+        cielo_service,
     );
     let group_service = Arc::new(GroupService::new(
         group_repository.clone(),

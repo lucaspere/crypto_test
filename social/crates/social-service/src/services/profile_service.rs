@@ -13,10 +13,13 @@ use crate::{
         profile_handlers::{LeaderboardQuery, LeaderboardResponse, LeaderboardSort, ProfileQuery},
         token_handlers::TokenQuery,
     },
-    external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
+    external_services::{
+        birdeye::BirdeyeService, cielo::CieloService, rust_monorepo::RustMonorepoService,
+    },
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
+        tokens::Chain,
         user_stats::{BestPick, UserStats},
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
@@ -35,6 +38,7 @@ pub struct ProfileService {
     birdeye_service: Arc<BirdeyeService>,
     redis_service: Arc<RedisService>,
     token_service: Arc<TokenService>,
+    cielo_service: Arc<CieloService>,
 }
 
 impl ProfileService {
@@ -45,6 +49,7 @@ impl ProfileService {
         birdeye_service: Arc<BirdeyeService>,
         redis_service: Arc<RedisService>,
         token_service: Arc<TokenService>,
+        cielo_service: Arc<CieloService>,
     ) -> Self {
         ProfileService {
             user_repository,
@@ -53,6 +58,7 @@ impl ProfileService {
             birdeye_service,
             redis_service,
             token_service,
+            cielo_service,
         }
     }
 
@@ -93,7 +99,8 @@ impl ProfileService {
             "User found, fetching user picks and stats for username: {}",
             params.username
         );
-        let (_, stats) = self
+        dbg!(&user);
+        let (_, mut stats) = self
             .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
                 username: params.username.clone(),
                 picked_after: Some(params.picked_after.clone()),
@@ -102,6 +109,17 @@ impl ProfileService {
             })
             .await?;
 
+        if let Some(wallet) = user.wallet_addresses.as_ref().and_then(|wa| {
+            wa.iter()
+                .filter(|w| w.address.is_some())
+                .find(|w| w.chain == Some(Chain::Solana.to_string()))
+        }) {
+            let realized_pnl_usd = self
+                .cielo_service
+                .get_wallet_stats(wallet.address.as_ref().unwrap(), None)
+                .await?;
+            stats.realized_profit = realized_pnl_usd.realized_pnl_usd.round_dp(2);
+        }
         let response = ProfileDetailsResponse {
             id: user.id,
             username: params.username.clone(),

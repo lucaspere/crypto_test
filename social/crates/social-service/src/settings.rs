@@ -9,6 +9,7 @@ pub struct Settings {
     pub port: Option<u16>,
     pub rust_monorepo_url: String,
     pub birdeye_api_key: String,
+    pub cielo_api_key: String,
 }
 
 pub fn load_settings() -> Result<Settings, config::ConfigError> {

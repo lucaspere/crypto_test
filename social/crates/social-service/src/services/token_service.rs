@@ -2,7 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rust_decimal::{prelude::One, Decimal};
+use rust_decimal::{
+    prelude::{One, Zero},
+    Decimal,
+};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -197,7 +200,8 @@ impl TokenService {
                 .await?;
 
             pick.highest_market_cap = Some(ohlcv.high);
-            let hit_2x = ohlcv.high / pick.market_cap_at_call >= Decimal::from(2);
+            let hit_2x = calculate_return(&pick.market_cap_at_call, &ohlcv.high) - Decimal::one()
+                >= Decimal::from(2);
             if hit_2x {
                 pick.hit_date = Some(Utc::now().into());
             }
@@ -215,7 +219,9 @@ impl TokenService {
 
             pick.highest_market_cap = Some(current_market_cap);
 
-            let hit_2x = current_market_cap / pick.market_cap_at_call >= Decimal::from(2);
+            let hit_2x = calculate_return(&pick.market_cap_at_call, &current_market_cap)
+                - Decimal::one()
+                >= Decimal::from(2);
             if hit_2x {
                 pick.hit_date = Some(Utc::now().into());
             }
@@ -385,7 +391,7 @@ impl TokenService {
 
 fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
     if market_cap_at_call.is_zero() || highest_market_cap.is_zero() {
-        Decimal::one()
+        Decimal::zero()
     } else {
         highest_market_cap / market_cap_at_call
     }
