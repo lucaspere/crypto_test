@@ -46,7 +46,7 @@ pub async fn follow_user(
         Ok(_) => StatusCode::OK.into_response(),
         Err(e) => {
             println!("Error following user: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            e.into_response()
         }
     }
 }
