@@ -99,7 +99,6 @@ impl ProfileService {
             "User found, fetching user picks and stats for username: {}",
             params.username
         );
-        dbg!(&user);
         let (_, mut stats) = self
             .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
                 username: params.username.clone(),
