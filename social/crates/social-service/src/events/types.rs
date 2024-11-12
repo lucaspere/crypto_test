@@ -35,7 +35,7 @@ impl TryFrom<&str> for Channel {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "social.token_pick" => Ok(Channel::TokenPick),
+            "social.token_picks" => Ok(Channel::TokenPick),
             _ => Err(crate::utils::api_errors::ApiError::InternalError(format!(
                 "Unknown channel: {}",
                 value
@@ -47,7 +47,7 @@ impl TryFrom<&str> for Channel {
 impl Display for Channel {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Channel::TokenPick => write!(f, "social.token_pick"),
+            Channel::TokenPick => write!(f, "social.token_picks"),
         }
     }
 }

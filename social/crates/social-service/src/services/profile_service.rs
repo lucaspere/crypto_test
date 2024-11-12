@@ -21,6 +21,7 @@ use crate::{
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         tokens::Chain,
         user_stats::{BestPick, UserStats},
+        users::User,
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
     utils::api_errors::ApiError,
@@ -100,25 +101,17 @@ impl ProfileService {
             params.username
         );
         let (_, mut stats) = self
-            .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
-                username: params.username.clone(),
-                picked_after: Some(params.picked_after.clone()),
-                multiplier: None,
-                group_ids: params.group_id.map(|id| vec![id]),
-            })
+            .get_user_picks_and_stats(
+                &ProfilePicksAndStatsQuery {
+                    username: params.username.clone(),
+                    picked_after: Some(params.picked_after.clone()),
+                    multiplier: None,
+                    group_ids: params.group_id.map(|id| vec![id]),
+                },
+                Some(&user),
+            )
             .await?;
 
-        if let Some(wallet) = user.wallet_addresses.as_ref().and_then(|wa| {
-            wa.iter()
-                .filter(|w| w.address.is_some())
-                .find(|w| w.chain == Some(Chain::Solana.to_string()))
-        }) {
-            let realized_pnl_usd = self
-                .cielo_service
-                .get_wallet_stats(wallet.address.as_ref().unwrap(), None)
-                .await?;
-            stats.realized_profit = realized_pnl_usd.realized_pnl_usd.round_dp(2);
-        }
         let response = ProfileDetailsResponse {
             id: user.id,
             username: params.username.clone(),
@@ -197,6 +190,7 @@ impl ProfileService {
     pub async fn get_user_picks_and_stats(
         &self,
         params: &ProfilePicksAndStatsQuery,
+        user: Option<&User>,
     ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
         info!("Getting user picks and stats for {}", params.username);
 
@@ -268,13 +262,26 @@ impl ProfileService {
         } else {
             Decimal::ZERO
         };
-
+        let mut realized_profit = Decimal::ZERO;
+        if let Some(user) = user {
+            if let Some(wallet) = user.wallet_addresses.as_ref().and_then(|wa| {
+                wa.iter()
+                    .filter(|w| w.address.is_some())
+                    .find(|w| w.chain == Some(Chain::Solana.to_string()))
+            }) {
+                let realized_pnl_usd = self
+                    .cielo_service
+                    .get_wallet_stats(wallet.address.as_ref().unwrap(), None)
+                    .await?;
+                realized_profit = realized_pnl_usd.realized_pnl_usd.round_dp(2);
+            }
+        }
         let stats = UserStats {
             total_picks,
             hit_rate: hit_rate.round_dp(2),
             pick_returns: total_returns.round_dp(2),
             average_pick_return: average_pick_return.round_dp(2),
-            realized_profit: Decimal::ZERO,     // TODO: Implement
+            realized_profit,
             total_volume_traded: Decimal::ZERO, // TODO: Implement
             hits: total_hits,
             misses: total_picks - total_hits,
