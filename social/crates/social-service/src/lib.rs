@@ -4,8 +4,8 @@ use apis::setup_routes;
 use axum::Router;
 use container::ServiceContainer;
 use services::{
-    group_service::GroupService, profile_service::ProfileService,
-    token_service::TokenService, user_service::UserService,
+    group_service::GroupService, profile_service::ProfileService, token_service::TokenService,
+    user_service::UserService,
 };
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
@@ -15,6 +15,7 @@ pub mod apis;
 pub mod container;
 pub mod external_services;
 pub mod models;
+pub mod pg_listeners;
 pub mod repositories;
 pub mod services;
 pub mod settings;
