@@ -7,6 +7,7 @@ pub struct LatestTokenMetadataResponse {
     pub address: String,
     pub price: Decimal,
     pub price_fetched_at_unix_time: i64,
+    pub market_cap: Decimal,
     pub metadata_fetched_at_unix_time: i64,
     pub metadata: BirdEyeMetadataDataProperty,
 }

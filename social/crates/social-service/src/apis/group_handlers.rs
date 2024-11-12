@@ -11,28 +11,19 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    models::{
-        groups::{CreateOrUpdateGroup, GroupMembersResponse, GroupResponse, GroupUser},
-        profiles::ProfileDetailsResponse,
-    },
+    apis::api_models::query::GroupMembersQuery,
+    models::groups::{CreateOrUpdateGroup, GroupMembersResponse, GroupResponse, GroupUser},
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
 
 use super::{
+    api_models::{request::CreateGroupRequest, response::PaginatedGroupMembersResponse},
     profile_handlers::LeaderboardSort,
     token_handlers::{PaginatedTokenPickResponse, TokenGroupQuery},
 };
 
 pub const GROUP_TAG: &str = "group";
-
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateGroupRequest {
-    group_id: i64,
-    name: String,
-    logo_uri: Option<String>,
-}
 
 #[utoipa::path(
     post,
@@ -166,26 +157,6 @@ pub(super) async fn get_group_picks(
             total_pages,
         }),
     ))
-}
-
-#[derive(Debug, Deserialize, IntoParams, Default)]
-pub struct GroupMembersQuery {
-    pub username: Option<String>,
-    #[param(default = 1)]
-    pub page: u32,
-    #[param(default = 10)]
-    pub limit: u32,
-    pub order_by: Option<String>,
-    pub order_direction: Option<String>,
-}
-
-#[derive(serde::Serialize, ToSchema)]
-pub struct PaginatedGroupMembersResponse {
-    pub items: Vec<ProfileDetailsResponse>,
-    pub total: usize,
-    pub page: u32,
-    pub limit: u32,
-    pub total_pages: u32,
 }
 
 #[utoipa::path(

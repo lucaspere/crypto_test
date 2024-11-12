@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use get_latest_w_metadata::LatestTokenMetadataResponse;
 use reqwest::Client;
-use tracing::{error, info};
 
 use crate::utils::api_errors::ApiError;
 
@@ -35,21 +34,16 @@ impl RustMonorepoService {
                 self.rust_monorepo_url,
             ))
             .header("Content-Type", "application/json")
-            .body(body)
+            .json(&body)
             .send()
             .await?;
 
-        let json_str = res.text().await?;
-        let res: Vec<LatestTokenMetadataResponse> =
-            serde_json::from_str(&json_str).map_err(|e| {
-                error!("Error parsing latest with metadata response: {}", e);
-                ApiError::InternalServerError("Internal server error".to_string())
-            })?;
-        info!(
-            "Got of total {} latest with metadata for addresses",
-            res.len()
-        );
-        let res = res.into_iter().map(|r| (r.address.clone(), r)).collect();
+        let res = res
+            .json::<Vec<LatestTokenMetadataResponse>>()
+            .await?
+            .into_iter()
+            .map(|r| (r.address.clone(), r))
+            .collect();
 
         Ok(res)
     }
