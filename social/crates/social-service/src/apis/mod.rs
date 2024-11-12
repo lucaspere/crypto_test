@@ -7,6 +7,7 @@ use utoipa_scalar::{Scalar, Servable};
 
 use crate::AppState;
 
+pub mod api_models;
 pub mod group_handlers;
 pub mod profile_handlers;
 pub mod token_handlers;
@@ -18,7 +19,6 @@ pub mod user_handlers;
         (name = "users", description = "User management API")
     )
 )]
-
 pub struct ApiDoc;
 
 pub fn setup_routes() -> Router<Arc<AppState>> {

@@ -2,10 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rust_decimal::{
-    prelude::{One, Zero},
-    Decimal,
-};
+use rust_decimal::{prelude::Zero, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -185,7 +182,7 @@ impl TokenService {
             .get(&pick.token.address)
             .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
 
-        let current_market_cap = latest_price.metadata.mc.unwrap_or_default();
+        let current_market_cap = latest_price.market_cap;
         let mut has_update = false;
         if pick.highest_market_cap.is_none() {
             let ohlcv = self
@@ -288,10 +285,7 @@ impl TokenService {
             self.token_repository.save_token(token).await?;
         }
 
-        let market_cap_at_call = token_info
-            .metadata
-            .mc
-            .unwrap_or_else(|| token_info.metadata.supply.unwrap_or_default() * token_info.price);
+        let market_cap_at_call = token_info.market_cap;
 
         let call_date = pick
             .timestamp
