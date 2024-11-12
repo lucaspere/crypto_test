@@ -64,9 +64,8 @@ impl ServiceContainer {
             )),
         ));
 
-        let telegram_service = Arc::new(TeloxideTelegramBotApi::new(Bot::new(
-            settings.telegram_bot_token.clone(),
-        )));
+        let bot = Bot::new(settings.telegram_bot_token.clone());
+        let telegram_service = Arc::new(TeloxideTelegramBotApi::new(bot).await?);
 
         Ok(Self {
             user_service,

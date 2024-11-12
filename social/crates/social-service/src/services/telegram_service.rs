@@ -1,7 +1,7 @@
 use teloxide::payloads::SendMessageSetters;
 use teloxide::requests::{Request, Requester};
 use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Recipient, ReplyMarkup, UserId,
+    InlineKeyboardButton, InlineKeyboardMarkup, Me, ParseMode, Recipient, ReplyMarkup, UserId,
 };
 use teloxide::Bot;
 
@@ -9,11 +9,13 @@ use crate::utils::api_errors::ApiError;
 
 pub struct TeloxideTelegramBotApi {
     bot: Bot,
+    pub bot_info: Option<Me>,
 }
 
 impl TeloxideTelegramBotApi {
-    pub fn new(bot: Bot) -> Self {
-        Self { bot }
+    pub async fn new(bot: Bot) -> Result<Self, ApiError> {
+        let bot_info = bot.get_me().await.ok();
+        Ok(Self { bot, bot_info })
     }
 }
 impl TeloxideTelegramBotApi {

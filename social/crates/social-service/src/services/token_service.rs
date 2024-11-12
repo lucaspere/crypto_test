@@ -192,7 +192,7 @@ impl TokenService {
                     &pick.token.address,
                     pick.call_date.timestamp(),
                     Utc::now().timestamp(),
-                    "15m",
+                    "1H",
                 )
                 .await?;
 
