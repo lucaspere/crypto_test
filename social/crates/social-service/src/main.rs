@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use dotenv::dotenv;
-use social_service::settings;
+use social_service::{settings, start_event_listeners};
 use tokio::net::TcpListener;
 use tracing::{debug, error};
 
@@ -13,9 +15,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if settings.environment == Some("DEV".to_string()) {
         debug!("Running in DEV environment");
     }
-    let app = social_service::setup_router(&settings).await?;
+    let (app, container) = social_service::setup_router(&settings).await?;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
     debug!("Server running on http://{:?}", listener.local_addr());
+    let settings = Arc::new(settings);
+
+    tokio::spawn(async move {
+        start_event_listeners(settings, container)
+            .await
+            .map_err(|e| error!("Failed to start event listeners: {}", e))
+    });
 
     if let Err(e) = axum::serve(listener, app).await {
         error!("Server error: {}", e);

@@ -25,6 +25,12 @@ pub enum ApiError {
 
     #[error("Redis error: {0}")]
     RedisError(#[from] redis::RedisError),
+
+    #[error("Teloxide error: {0}")]
+    TeloxideError(#[from] teloxide::RequestError),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 impl ApiError {
@@ -37,6 +43,8 @@ impl ApiError {
             ApiError::UserAlreadyFollowed => StatusCode::CONFLICT,
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::TeloxideError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

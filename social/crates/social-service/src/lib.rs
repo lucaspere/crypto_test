@@ -3,19 +3,26 @@
 use apis::setup_routes;
 use axum::Router;
 use container::ServiceContainer;
+use events::{
+    handlers::{EventHandler, TokenPickHandler},
+    listeners::PostgresEventListener,
+    types::Channel,
+};
 use services::{
     group_service::GroupService, profile_service::ProfileService, token_service::TokenService,
     user_service::UserService,
 };
+use settings::Settings;
 use sqlx::postgres::PgPool;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::CorsLayer;
+use utils::api_errors::ApiError;
 
 pub mod apis;
 pub mod container;
+pub mod events;
 pub mod external_services;
 pub mod models;
-pub mod pg_listeners;
 pub mod repositories;
 pub mod services;
 pub mod settings;
@@ -35,19 +42,22 @@ pub async fn setup_database(database_url: &str) -> Result<Arc<PgPool>, sqlx::Err
 
 pub async fn setup_router(
     settings: &settings::Settings,
-) -> Result<Router, Box<dyn std::error::Error>> {
+) -> Result<(Router, Arc<ServiceContainer>), Box<dyn std::error::Error>> {
     let db = setup_database(&settings.database_url).await?;
     let container = setup_services(db, settings).await?;
     let router = create_routes();
 
-    Ok(router
-        .layer(CorsLayer::permissive())
-        .with_state(Arc::new(AppState {
-            user_service: Arc::clone(&container.user_service),
-            profile_service: Arc::clone(&container.profile_service),
-            token_service: Arc::clone(&container.token_service),
-            group_service: Arc::clone(&container.group_service),
-        })))
+    Ok((
+        router
+            .layer(CorsLayer::permissive())
+            .with_state(Arc::new(AppState {
+                user_service: Arc::clone(&container.user_service),
+                profile_service: Arc::clone(&container.profile_service),
+                token_service: Arc::clone(&container.token_service),
+                group_service: Arc::clone(&container.group_service),
+            })),
+        Arc::new(container),
+    ))
 }
 
 fn create_routes() -> Router<Arc<AppState>> {
@@ -78,4 +88,20 @@ pub fn init_tracing(settings: &settings::Settings) {
         .with_thread_names(true)
         .with_ansi(env != "PROD")
         .init();
+}
+
+pub async fn start_event_listeners(
+    settings: Arc<Settings>,
+    services: Arc<ServiceContainer>,
+) -> Result<(), ApiError> {
+    let mut handlers = HashMap::new();
+    handlers.insert(
+        Channel::TokenPick,
+        Box::new(TokenPickHandler::new(services)) as Box<dyn EventHandler>,
+    );
+
+    let mut listener = PostgresEventListener::new(settings, handlers).await?;
+    listener.start().await?;
+
+    Ok(())
 }

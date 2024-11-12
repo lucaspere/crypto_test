@@ -4,10 +4,11 @@ use uuid::Uuid;
 
 use crate::{
     apis::{
+        api_models::response::GroupMembersResponse,
         group_handlers::{AddUserRequest, ListGroupsQuery},
         profile_handlers::{LeaderboardSort, ProfileQuery, TimeRange},
     },
-    models::groups::{CreateOrUpdateGroup, Group, GroupMembersResponse, GroupUser},
+    models::groups::{CreateOrUpdateGroup, Group, GroupUser},
     repositories::group_repository::GroupRepository,
     utils::api_errors::ApiError,
 };
