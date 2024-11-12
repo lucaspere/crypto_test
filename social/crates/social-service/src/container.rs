@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
+use teloxide::Bot;
 
 use crate::{
     external_services::{
@@ -12,7 +13,8 @@ use crate::{
     },
     services::{
         group_service::GroupService, profile_service::ProfileService, redis_service::RedisService,
-        token_service::TokenService, user_service::UserService,
+        telegram_service::TeloxideTelegramBotApi, token_service::TokenService,
+        user_service::UserService,
     },
     settings::Settings,
 };
@@ -23,6 +25,7 @@ pub struct ServiceContainer {
     pub token_service: Arc<TokenService>,
     pub group_service: Arc<GroupService>,
     pub redis_service: Arc<RedisService>,
+    pub telegram_service: Arc<TeloxideTelegramBotApi>,
 }
 
 impl ServiceContainer {
@@ -61,12 +64,17 @@ impl ServiceContainer {
             )),
         ));
 
+        let telegram_service = Arc::new(TeloxideTelegramBotApi::new(Bot::new(
+            settings.telegram_bot_token.clone(),
+        )));
+
         Ok(Self {
             user_service,
             profile_service,
             token_service,
             group_service,
             redis_service,
+            telegram_service,
         })
     }
 }

@@ -26,5 +26,6 @@ tower-http = { workspace = true, features = ["cors"] }
 reqwest = { workspace = true }
 futures = { workspace = true }
 redis = { workspace = true }
-
+teloxide = "0.13.0"
+async-trait = { workspace = true }
 [dev-dependencies]

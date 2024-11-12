@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS social.user_follows (
     follower_id uuid NOT NULL,
     followed_id uuid NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT user_follows_pkey PRIMARY KEY (follower_id, followed_id),
     CONSTRAINT user_follows_check CHECK (follower_id <> followed_id)
 );
 

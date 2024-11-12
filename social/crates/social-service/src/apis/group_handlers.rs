@@ -12,13 +12,16 @@ use uuid::Uuid;
 
 use crate::{
     apis::api_models::query::GroupMembersQuery,
-    models::groups::{CreateOrUpdateGroup, GroupMembersResponse, GroupResponse, GroupUser},
+    models::groups::{CreateOrUpdateGroup, GroupUser},
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
 
 use super::{
-    api_models::{request::CreateGroupRequest, response::PaginatedGroupMembersResponse},
+    api_models::{
+        request::CreateGroupRequest,
+        response::{GroupMembersResponse, GroupResponse, PaginatedGroupMembersResponse},
+    },
     profile_handlers::LeaderboardSort,
     token_handlers::{PaginatedTokenPickResponse, TokenGroupQuery},
 };
