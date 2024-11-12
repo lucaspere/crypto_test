@@ -38,7 +38,6 @@ pub(super) async fn get_profile(
     Query(query): Query<ProfileQuery>,
 ) -> Result<(StatusCode, Json<ProfileDetailsResponse>), ApiError> {
     let profile = app_state.profile_service.get_profile(query).await?;
-
     Ok((StatusCode::OK, profile.into()))
 }
 
@@ -148,7 +147,7 @@ pub(super) async fn get_profile_picks_and_stats(
 ) -> Result<(StatusCode, Json<ProfilePicksAndStatsResponse>), ApiError> {
     let (picks, stats) = app_state
         .profile_service
-        .get_user_picks_and_stats(&params)
+        .get_user_picks_and_stats(&params, None)
         .await?;
 
     Ok((

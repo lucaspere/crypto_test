@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::sync::Arc;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::{container::ServiceContainer, utils::api_errors::ApiError};
 
@@ -66,7 +66,7 @@ impl TokenPickHandler {
             .get_followers(data.token_pick.user.id)
             .await?;
 
-        debug!(
+        info!(
             "Notifying {} followers about token pick {}",
             followers.len(),
             data.token_pick.id
@@ -79,7 +79,7 @@ impl TokenPickHandler {
             let telegram_service = self.services.telegram_service.clone();
 
             async move {
-                debug!("Sending notification to follower {}", follower.telegram_id);
+                info!("Sending notification to follower {}", follower.telegram_id);
 
                 if let Err(e) = telegram_service
                     .send_message(follower.telegram_id as u64, &message)
