@@ -27,13 +27,19 @@ impl TokenPickHandler {
         let user = &data.token_pick.user;
 
         let market_cap = format_market_cap(data.token_pick.market_cap_at_call);
-
-        let dex_link = match token.chain.as_str() {
-            "ethereum" => format!("https://dexscreener.com/{}/{}", token.chain, token.address),
-            "solana" => format!("https://dexscreener.com/solana/{}", token.address),
-            _ => format!("https://dexscreener.com/search?q={}", token.address),
-        };
-
+        let bot_username = self
+            .services
+            .telegram_service
+            .bot_info
+            .as_ref()
+            .unwrap()
+            .username
+            .clone()
+            .unwrap_or("BullpenFiBot".to_string());
+        let bullpen_link = format!(
+            "https://t.me/{}/app?startapp=tokenChart_{}",
+            bot_username, token.address
+        );
         format!(
             "🎯 <b>New Token Pick!</b>\n\n\
             👤 Picked by: <b>{}</b>\n\
@@ -41,14 +47,14 @@ impl TokenPickHandler {
             🪙 Token: <b>{}</b> ({})\n\
             💰 Market Cap: <b>${}</b>\n\
             ⛓️ Chain: <b>{}</b>\n\n\
-            🔍 <a href='{}'>View on DexScreener</a>",
+            🚀 <a href='{}'>View on Bullpen</a>",
             user.username,
             data.group_name,
             token.symbol,
             token.name,
             market_cap,
             token.chain.to_uppercase(),
-            dex_link
+            bullpen_link,
         )
     }
 
