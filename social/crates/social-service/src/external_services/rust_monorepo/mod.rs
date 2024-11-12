@@ -34,7 +34,7 @@ impl RustMonorepoService {
                 self.rust_monorepo_url,
             ))
             .header("Content-Type", "application/json")
-            .json(&body)
+            .body(body)
             .send()
             .await?;
 
