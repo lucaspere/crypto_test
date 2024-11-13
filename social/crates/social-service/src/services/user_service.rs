@@ -39,15 +39,15 @@ impl UserService {
         Ok(user.map(UserResponse::from))
     }
 
-    pub async fn follow_user(&self, follower_id: Uuid, followed_id: Uuid) -> Result<(), ApiError> {
-        let follower_user = self.get_followers(follower_id).await?;
-        let already_following = follower_user.iter().any(|user| user.id == followed_id);
+    pub async fn follow_user(&self, user_id: Uuid, followed_id: Uuid) -> Result<(), ApiError> {
+        let follower_user = self.get_followers(followed_id).await?;
+        let already_following = follower_user.iter().any(|user| user.id == user_id);
         if already_following {
             return Err(ApiError::UserAlreadyFollowed);
         }
 
         self.user_repository
-            .follow_user(follower_id, followed_id)
+            .follow_user(user_id, followed_id)
             .await?;
 
         Ok(())
