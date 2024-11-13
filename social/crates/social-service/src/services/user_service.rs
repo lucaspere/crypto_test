@@ -40,7 +40,11 @@ impl UserService {
     }
 
     pub async fn follow_user(&self, user_id: Uuid, followed_id: Uuid) -> Result<(), ApiError> {
-        let follower_user = self.get_followers(followed_id).await?;
+        let user = self
+            .get_by_id(followed_id)
+            .await?
+            .ok_or(ApiError::UserNotFound)?;
+        let follower_user = self.get_followers(&user.username).await?;
         let already_following = follower_user.iter().any(|user| user.id == user_id);
         if already_following {
             return Err(ApiError::UserAlreadyFollowed);
@@ -63,8 +67,8 @@ impl UserService {
             .await
     }
 
-    pub async fn get_followers(&self, user_id: Uuid) -> Result<Vec<UserResponse>, sqlx::Error> {
-        let followers = self.user_repository.list_followers(user_id).await?;
+    pub async fn get_followers(&self, username: &str) -> Result<Vec<UserResponse>, sqlx::Error> {
+        let followers = self.user_repository.list_followers(username).await?;
         Ok(followers.into_iter().map(UserResponse::from).collect())
     }
 

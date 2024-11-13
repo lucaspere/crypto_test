@@ -82,20 +82,20 @@ pub async fn unfollow_user(
 #[utoipa::path(
     get,
     tag = TAG,
-    path = "/{id}/followers",
+    path = "/{username}/followers",
     responses(
         (status = 200, description = "User followers", body = Vec<UserResponse>)
     ),
     params((
-        "id" = Uuid,
+        "username" = String,
         Path,
     ))
 )]
 pub async fn get_user_followers(
     State(app_state): State<Arc<AppState>>,
-    Path(user_id): Path<Uuid>,
+    Path(username): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let followers = app_state.user_service.get_followers(user_id).await?;
+    let followers = app_state.user_service.get_followers(&username).await?;
 
     Ok((StatusCode::OK, Json(followers)))
 }
