@@ -1,18 +1,22 @@
 use std::sync::Arc;
 
-use futures::future::join_all;
-use tracing::{error, info, instrument};
-
+use super::{format_number_with_dynamic_precision, format_number_with_metric_prefix};
 use crate::{
     container::ServiceContainer,
-    events::{handlers::format_risk_score_emoji, types::TokenPickEventData},
+    events::{
+        handlers::format_risk_score_emoji,
+        types::{MessageResult, TokenMetadata, TokenPickEventData, TokenPriceMetadata},
+    },
     external_services::{
         ext_data_services_v1::token_data::types::TokenReportData,
         rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
     },
     utils::api_errors::ApiError,
 };
+use futures::future::join_all;
 use rust_decimal::prelude::*;
+use serde::{Deserialize, Serialize};
+use tracing::{error, info, instrument};
 
 pub struct TokenPickHandler {
     services: Arc<ServiceContainer>,
@@ -264,7 +268,7 @@ fn format_header_line(text: &str, is_new_tip: bool) -> String {
         };
     }
 
-    let remaining_space = target_length - text.len() - 2; // -2 for spaces
+    let remaining_space = target_length.saturating_sub(text.len() + 2); // -2 for spaces
     let padding_each_side = remaining_space / 2;
 
     let padded_text = format!(
@@ -279,52 +283,6 @@ fn format_header_line(text: &str, is_new_tip: bool) -> String {
     } else {
         padded_text
     }
-}
-
-use serde::{Deserialize, Serialize};
-
-use super::{format_number_with_dynamic_precision, format_number_with_metric_prefix};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CurrencyMeta {
-    pub symbol: String,
-    pub name: String,
-    pub currency: Currency,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Currency {
-    pub mint_address: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TokenPriceMetadata {
-    pub price: Option<String>,
-    pub symbol: String,
-    pub address: String,
-    pub metadata: TokenMetadata,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TokenMetadata {
-    pub mc: Option<String>,
-    pub v24h_usd: Option<String>,
-    pub price_change_1h_percent: Option<String>,
-    pub price_change_4h_percent: Option<String>,
-    pub price_change_24h_percent: Option<String>,
-    pub holder: Option<String>,
-    pub liquidity: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TelegramUser {
-    pub username: Option<String>,
-    pub first_name: Option<String>,
-}
-
-pub struct MessageResult {
-    pub message_text: String,
-    pub common_fields: String,
 }
 
 impl From<LatestTokenMetadataResponse> for TokenPriceMetadata {
@@ -391,7 +349,8 @@ fn format_top_holders(
                 .map(|holder| {
                     format!(
                         r#"<a href="https://solscan.io/account/{}">{:.1}</a>"#,
-                        holder.owner, holder.pct
+                        holder.owner,
+                        holder.pct.min(100.0)
                     )
                 })
                 .collect();
@@ -405,8 +364,9 @@ fn format_top_holders(
                 .top_holders
                 .iter()
                 .take(num_top_holders)
-                .map(|holder| holder.pct)
-                .sum();
+                .map(|holder| holder.pct.min(100.0))
+                .sum::<f64>()
+                .min(100.0);
 
             let display = format!(
                 "{} <b>[{}%]</b>",

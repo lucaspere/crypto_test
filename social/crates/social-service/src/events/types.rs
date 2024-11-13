@@ -51,3 +51,27 @@ impl Display for Channel {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenPriceMetadata {
+    pub price: Option<String>,
+    pub symbol: String,
+    pub address: String,
+    pub metadata: TokenMetadata,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenMetadata {
+    pub mc: Option<String>,
+    pub v24h_usd: Option<String>,
+    pub price_change_1h_percent: Option<String>,
+    pub price_change_4h_percent: Option<String>,
+    pub price_change_24h_percent: Option<String>,
+    pub holder: Option<String>,
+    pub liquidity: Option<String>,
+}
+
+pub struct MessageResult {
+    pub message_text: String,
+    pub common_fields: String,
+}
