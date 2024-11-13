@@ -4,7 +4,7 @@ use apis::setup_routes;
 use axum::Router;
 use container::ServiceContainer;
 use events::{
-    handlers::{EventHandler, TokenPickHandler},
+    handlers::{token_pick::TokenPickHandler, EventHandler},
     listeners::PostgresEventListener,
     types::Channel,
 };
