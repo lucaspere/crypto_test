@@ -28,4 +28,5 @@ futures = { workspace = true }
 redis = { workspace = true }
 teloxide = "0.13.0"
 async-trait = { workspace = true }
+urlencoding = "2.1"
 [dev-dependencies]

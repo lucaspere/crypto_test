@@ -5,7 +5,8 @@ use teloxide::Bot;
 
 use crate::{
     external_services::{
-        birdeye::BirdeyeService, cielo::CieloService, rust_monorepo::RustMonorepoService,
+        birdeye::BirdeyeService, cielo::CieloService,
+        ext_data_services_v1::token_data::TokenDataService, rust_monorepo::RustMonorepoService,
     },
     repositories::{
         group_repository::GroupRepository, token_repository::TokenRepository,
@@ -27,6 +28,7 @@ pub struct ServiceContainer {
     pub redis_service: Arc<RedisService>,
     pub telegram_service: Arc<TeloxideTelegramBotApi>,
     pub rust_monorepo_service: Arc<RustMonorepoService>,
+    pub token_data_service: Option<Arc<TokenDataService>>,
 }
 
 impl ServiceContainer {
@@ -39,9 +41,19 @@ impl ServiceContainer {
         let redis_service = Arc::new(RedisService::new(&settings.redis_url).await?);
         let rust_monorepo_service =
             Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
+        let token_data_service =
+            if let Some(api_key) = settings.ext_data_services_v1_api_key.clone() {
+                Some(Arc::new(TokenDataService::new(
+                    api_key,
+                    redis_service.clone(),
+                )))
+            } else {
+                None
+            };
+
         let user_service = Arc::new(UserService::new(user_repository.clone()));
         let group_service = Arc::new(GroupService::new(
-            Arc::new(GroupRepository::new(db)),
+            Arc::new(GroupRepository::new(db.clone())),
             user_service.clone(),
             Arc::new(None),
         ));
@@ -53,7 +65,8 @@ impl ServiceContainer {
             Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone())),
             group_service.clone(),
         ));
-        let profile_service = Arc::new(ProfileService::new(
+
+        let profile_service = ProfileService::new(
             user_repository,
             token_repository,
             rust_monorepo_service.clone(),
@@ -64,8 +77,14 @@ impl ServiceContainer {
                 settings.cielo_api_key.clone(),
                 redis_service.clone(),
             )),
+        );
+        let profile_group = Arc::new(Some(profile_service.clone()));
+        let group_service = Arc::new(GroupService::new(
+            Arc::new(GroupRepository::new(db)),
+            user_service.clone(),
+            profile_group,
         ));
-
+        let profile_service = Arc::new(profile_service);
         let bot = Bot::new(settings.telegram_bot_token.clone());
         let telegram_service = Arc::new(TeloxideTelegramBotApi::new(bot).await?);
 
@@ -77,6 +96,7 @@ impl ServiceContainer {
             redis_service,
             telegram_service,
             rust_monorepo_service,
+            token_data_service,
         })
     }
 }
