@@ -6,7 +6,10 @@ use tracing::{error, info, instrument};
 use crate::{
     container::ServiceContainer,
     events::{handlers::format_risk_score_emoji, types::TokenPickEventData},
-    external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
+    external_services::{
+        ext_data_services_v1::token_data::types::TokenReportData,
+        rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
+    },
     utils::api_errors::ApiError,
 };
 use rust_decimal::prelude::*;
@@ -42,8 +45,18 @@ impl TokenPickHandler {
             .next()
             .unwrap()
             .1;
+        let token_report = if let Some(token_data_service) = &self.services.token_data_service {
+            token_data_service
+                .get_token_report(&[data.token_pick.token.address.clone()])
+                .await
+                .ok()
+        } else {
+            None
+        };
+        let rugcheck_report_data =
+            token_report.and_then(|r| r.data.into_iter().next().and_then(|(_, d)| d));
         let message = self
-            .format_token_pick_message(&token_price_metadata.into(), None, data)
+            .format_token_pick_message(&token_price_metadata.into(), rugcheck_report_data, data)
             .unwrap();
 
         let notification_futures = followers.into_iter().map(|follower| {
@@ -73,7 +86,7 @@ impl TokenPickHandler {
     pub fn format_token_pick_message(
         &self,
         token_price_metadata: &TokenPriceMetadata,
-        rugcheck_report_data: Option<&TokenReport>,
+        rugcheck_report_data: Option<TokenReportData>,
         event_data: &TokenPickEventData,
     ) -> Result<MessageResult, Box<dyn std::error::Error>> {
         let token_pick = &event_data.token_pick;
@@ -162,17 +175,18 @@ impl TokenPickHandler {
 
         // Format risk score
         let risk_score_display = match &rugcheck_report_data {
-            Some(report) => match report.score {
-                Some(score) if score != -1.0 => {
-                    let formatted_score = score.round();
-                    let emoji = format_risk_score_emoji(score);
+            Some(report) => {
+                if report.score != -1.0 {
+                    let formatted_score = report.score.round();
+                    let emoji = format_risk_score_emoji(report.score);
                     format!(
                         r#"<a href="https://rugcheck.xyz/tokens/{}">{}</a> {}"#,
                         address, formatted_score, emoji
                     )
+                } else {
+                    "??? ❌".to_string()
                 }
-                _ => "??? ❌".to_string(),
-            },
+            }
             None => "??? ❌".to_string(),
         };
 
@@ -181,10 +195,8 @@ impl TokenPickHandler {
             format_top_holders(rugcheck_report_data, Some(&address), 5);
 
         // Format market cap at call time
-        let formatted_market_cap_at_call = format!(
-            "${}",
-            format_number_with_metric_prefix(token_pick.market_cap_at_call.to_f64().unwrap())
-        );
+        let formatted_market_cap_at_call =
+            format_number_with_metric_prefix(token_pick.market_cap_at_call.to_f64().unwrap());
 
         let header = format_header_line(
             &format!("🎯 {} just made a pick!", token_pick.user.username),
@@ -220,7 +232,7 @@ impl TokenPickHandler {
         );
 
         let new_tip_specific_info = format!(
-            r#"{} at a <b>$${}</b> market cap."#,
+            r#"{} at a <b>${}</b> market cap."#,
             linked_token_symbol, formatted_market_cap_at_call
         );
         let mint_address_copy = format!(r#"<code>${}</code> — <i>tap to copy</i>"#, address);
@@ -271,9 +283,7 @@ fn format_header_line(text: &str, is_new_tip: bool) -> String {
 
 use serde::{Deserialize, Serialize};
 
-use super::{
-    format_number_with_dynamic_precision, format_number_with_metric_prefix,
-};
+use super::{format_number_with_dynamic_precision, format_number_with_metric_prefix};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CurrencyMeta {
@@ -368,7 +378,7 @@ pub struct TopHolder {
 }
 
 fn format_top_holders(
-    rugcheck_report_data: Option<&TokenReport>,
+    rugcheck_report_data: Option<TokenReportData>,
     mint_address: Option<&str>,
     num_top_holders: usize,
 ) -> (String, f64) {

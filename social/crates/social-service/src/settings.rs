@@ -12,6 +12,8 @@ pub struct Settings {
     pub cielo_api_key: String,
     pub telegram_bot_token: String,
     pub pg_listen_channels: Option<String>,
+    pub ext_data_services_v1_api_key: Option<String>,
+    pub ext_data_services_v1_base_url: Option<String>,
 }
 
 pub fn load_settings() -> Result<Settings, config::ConfigError> {
