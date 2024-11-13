@@ -26,6 +26,7 @@ pub struct ServiceContainer {
     pub group_service: Arc<GroupService>,
     pub redis_service: Arc<RedisService>,
     pub telegram_service: Arc<TeloxideTelegramBotApi>,
+    pub rust_monorepo_service: Arc<RustMonorepoService>,
 }
 
 impl ServiceContainer {
@@ -36,7 +37,8 @@ impl ServiceContainer {
         let user_repository = Arc::new(UserRepository::new(db.clone()));
         let token_repository = Arc::new(TokenRepository::new(db.clone()));
         let redis_service = Arc::new(RedisService::new(&settings.redis_url).await?);
-
+        let rust_monorepo_service =
+            Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
         let user_service = Arc::new(UserService::new(user_repository.clone()));
         let group_service = Arc::new(GroupService::new(
             Arc::new(GroupRepository::new(db)),
@@ -45,7 +47,7 @@ impl ServiceContainer {
         ));
         let token_service = Arc::new(TokenService::new(
             token_repository.clone(),
-            Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone())),
+            rust_monorepo_service.clone(),
             user_service.clone(),
             redis_service.clone(),
             Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone())),
@@ -54,7 +56,7 @@ impl ServiceContainer {
         let profile_service = Arc::new(ProfileService::new(
             user_repository,
             token_repository,
-            Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone())),
+            rust_monorepo_service.clone(),
             Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone())),
             redis_service.clone(),
             token_service.clone(),
@@ -74,6 +76,7 @@ impl ServiceContainer {
             group_service,
             redis_service,
             telegram_service,
+            rust_monorepo_service,
         })
     }
 }

@@ -1,7 +1,8 @@
 use teloxide::payloads::SendMessageSetters;
 use teloxide::requests::{Request, Requester};
 use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardMarkup, Me, ParseMode, Recipient, ReplyMarkup, UserId,
+    InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Me, ParseMode, Recipient,
+    ReplyMarkup, UserId,
 };
 use teloxide::Bot;
 
@@ -27,6 +28,13 @@ impl TeloxideTelegramBotApi {
         self.bot
             .send_message(Recipient::from(UserId(telegram_id)), message)
             .parse_mode(ParseMode::Html)
+            .link_preview_options(LinkPreviewOptions {
+                is_disabled: true,
+                url: None,
+                prefer_small_media: false,
+                prefer_large_media: false,
+                show_above_text: false,
+            })
             .reply_markup(ReplyMarkup::InlineKeyboard(InlineKeyboardMarkup::new(
                 vec![vec![InlineKeyboardButton::callback("Back", "start")]],
             )))
