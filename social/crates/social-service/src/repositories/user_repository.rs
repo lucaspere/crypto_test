@@ -157,7 +157,7 @@ impl UserRepository {
         Ok(user)
     }
 
-    pub async fn list_followers(&self, user_id: Uuid) -> Result<Vec<User>, sqlx::Error> {
+    pub async fn list_followers(&self, username: &str) -> Result<Vec<User>, sqlx::Error> {
         let query = r#"
         SELECT
             u.*,
@@ -169,11 +169,11 @@ impl UserRepository {
         LEFT JOIN
             public.wallet_account_chain wac ON wac.wallet_account_address = wa.address
         INNER JOIN social.user_follows uf ON u.id = uf.follower_id
-        WHERE uf.followed_id = $1
+        WHERE uf.followed_id = (SELECT id FROM public.user WHERE username = $1)
         GROUP BY u.id
         "#;
         sqlx::query_as::<_, User>(&query)
-            .bind(user_id)
+            .bind(username)
             .fetch_all(self.db.as_ref())
             .await
     }

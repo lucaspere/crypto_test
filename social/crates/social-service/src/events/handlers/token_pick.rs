@@ -28,7 +28,7 @@ impl TokenPickHandler {
         let followers = self
             .services
             .user_service
-            .get_followers(data.token_pick.user.id)
+            .get_followers(&data.token_pick.user.username)
             .await?;
 
         info!(
