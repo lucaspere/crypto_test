@@ -44,20 +44,22 @@ pub(super) async fn get_profile(
 #[derive(Deserialize, ToSchema, Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TimeRange {
+    SixHours,
     Day,
     Week,
-    Month,
     #[default]
-    Year,
+    Month,
+    AllTime,
 }
 
 impl TimeRange {
     pub fn to_date_time(&self, now: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
         match self {
+            TimeRange::SixHours => now - Duration::hours(6),
             TimeRange::Day => now - Duration::days(1),
             TimeRange::Week => now - Duration::weeks(1),
             TimeRange::Month => now - Duration::days(30),
-            TimeRange::Year => now - Duration::days(365),
+            TimeRange::AllTime => now - Duration::days(365),
         }
     }
 }
@@ -65,10 +67,11 @@ impl TimeRange {
 impl ToString for TimeRange {
     fn to_string(&self) -> String {
         match self {
+            TimeRange::SixHours => "six_hours".to_string(),
             TimeRange::Day => "day".to_string(),
             TimeRange::Week => "week".to_string(),
             TimeRange::Month => "month".to_string(),
-            TimeRange::Year => "year".to_string(),
+            TimeRange::AllTime => "all_time".to_string(),
         }
     }
 }
@@ -82,7 +85,7 @@ pub struct ProfileQuery {
 }
 
 fn default_time_range() -> TimeRange {
-    TimeRange::Year
+    TimeRange::Month
 }
 
 //     get,
@@ -164,6 +167,7 @@ pub enum LeaderboardSort {
     RealizedProfit,
     TotalPicks,
     MostRecentPick,
+    AverageReturn,
 }
 
 #[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug, Default)]

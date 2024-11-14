@@ -27,7 +27,7 @@ pub struct ProfileQuery {
 }
 
 fn default_time_range() -> TimeRange {
-    TimeRange::Year
+    TimeRange::AllTime
 }
 
 #[derive(Debug, Deserialize, IntoParams, Default)]

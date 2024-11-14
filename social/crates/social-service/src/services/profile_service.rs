@@ -201,6 +201,10 @@ impl ProfileService {
             Some(LeaderboardSort::TotalPicks) => {
                 b.pick_summary.total_picks.cmp(&a.pick_summary.total_picks)
             }
+            Some(LeaderboardSort::AverageReturn) => b
+                .pick_summary
+                .average_return
+                .cmp(&a.pick_summary.average_return),
             _ => a.username.cmp(&b.username),
         });
         info!("Sorted profiles");
