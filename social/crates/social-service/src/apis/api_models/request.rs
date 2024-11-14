@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub struct CreateGroupRequest {
     pub group_id: i64,
     pub name: String,
+    pub is_admin: Option<bool>,
     pub logo_uri: Option<String>,
 }
 

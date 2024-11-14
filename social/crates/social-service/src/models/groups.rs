@@ -10,6 +10,7 @@ pub struct Group {
     pub name: String,
     pub created_at: DateTime<Utc>,
     pub logo_uri: Option<String>,
+    pub is_admin: Option<bool>,
     pub token_pick_count: i64,
     pub total_returns: f64,
     pub user_count: i64,
@@ -22,6 +23,7 @@ pub struct CreateOrUpdateGroup {
     pub id: i64,
     pub name: String,
     pub logo_uri: Option<String>,
+    pub is_admin: Option<bool>,
 }
 
 impl From<Group> for CreateOrUpdateGroup {
@@ -30,6 +32,7 @@ impl From<Group> for CreateOrUpdateGroup {
             id: group.id,
             name: group.name,
             logo_uri: group.logo_uri,
+            is_admin: group.is_admin,
         }
     }
 }

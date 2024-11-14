@@ -46,7 +46,12 @@ pub(super) async fn create_or_update_group(
 ) -> Result<(StatusCode, Json<CreateOrUpdateGroup>), ApiError> {
     let group = app_state
         .group_service
-        .create_or_update_group(payload.group_id, &payload.name, &payload.logo_uri)
+        .create_or_update_group(
+            payload.group_id,
+            &payload.name,
+            &payload.logo_uri,
+            &payload.is_admin,
+        )
         .await?;
 
     Ok((StatusCode::OK, group.into()))

@@ -21,19 +21,30 @@ impl GroupRepository {
         id: i64,
         name: &str,
         logo_uri: &Option<String>,
+        is_admin: &Option<bool>,
     ) -> Result<CreateOrUpdateGroup, sqlx::Error> {
         sqlx::query_as::<_, CreateOrUpdateGroup>(
             r#"
-            INSERT INTO social.groups (id, name, logo_uri)
-            VALUES ($1, $2, $3)
+            INSERT INTO social.groups (id, name, logo_uri, is_admin)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO UPDATE
-            SET name = EXCLUDED.name, logo_uri = EXCLUDED.logo_uri
-            RETURNING id, name, logo_uri, created_at
+            SET
+                name = EXCLUDED.name,
+                logo_uri = CASE
+                    WHEN $3 IS NOT NULL THEN EXCLUDED.logo_uri
+                    ELSE social.groups.logo_uri
+                END,
+                is_admin = CASE
+                    WHEN $4 IS NOT NULL THEN $4
+                    ELSE social.groups.is_admin
+                END
+            RETURNING id, name, logo_uri, created_at, is_admin
             "#,
         )
         .bind(id)
         .bind(name)
         .bind(logo_uri)
+        .bind(is_admin)
         .fetch_one(self.db.as_ref())
         .await
     }

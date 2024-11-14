@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS social.groups (
     id BIGSERIAL PRIMARY KEY,
     name character varying(255) NOT NULL,
     logo_uri character varying(255),
+    is_admin boolean DEFAULT FALSE,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

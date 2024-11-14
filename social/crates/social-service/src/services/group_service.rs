@@ -40,9 +40,10 @@ impl GroupService {
         id: i64,
         name: &str,
         logo_uri: &Option<String>,
+        is_admin: &Option<bool>,
     ) -> Result<CreateOrUpdateGroup, ApiError> {
         self.repository
-            .upsert_group(id, name, logo_uri)
+            .upsert_group(id, name, logo_uri, is_admin)
             .await
             .map_err(|e| ApiError::DatabaseError(e))
     }
