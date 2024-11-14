@@ -105,6 +105,7 @@ impl TokenPickHandler {
             .username
             .clone()
             .unwrap_or("BullpenFiBot".to_string());
+        let bullpen_token_link = format!("https://t.me/{}/app?startapp=tokenChart_", bot_username);
         let bullpen_link = format!(
             "https://t.me/{}/app?startapp=profile_{}",
             bot_username, token_pick.user.username
@@ -174,8 +175,10 @@ impl TokenPickHandler {
             .unwrap_or_else(|| "-.-".to_string());
 
         // Format token symbol with link
-        let linked_token_symbol =
-            format!(r#"<a href="{}{}">{}</a>"#, bullpen_link, address, symbol);
+        let linked_token_symbol = format!(
+            r#"<a href="{}{}">{}</a>"#,
+            bullpen_token_link, address, symbol
+        );
 
         // Format risk score
         let risk_score_display = match &rugcheck_report_data {
@@ -210,19 +213,17 @@ impl TokenPickHandler {
         let common_fields = format!(
             r#"
 	Ticker: {}
-	{}: <code>{}</code>
-	{}: <code>{}</code>
+	Market Cap at Call: <code>{}</code>
+	Price at Call: <code>{}</code>
 	1h: <code>{}</code> 4h: <code>{}</code> 24h: <code>{}</code>
 
 	Volume (24h): <code>${}</code>
 	Liquidity: <code>${}</code>
 	Holders: <code>{}</code>
-	Top {}: {}
+	Top 5: {}
 	Rugcheck Score: {}"#,
             linked_token_symbol,
-            "Market Cap at Call",
             market_cap,
-            "Price at Call",
             price,
             price_change_1h,
             price_change_4h,
@@ -230,7 +231,6 @@ impl TokenPickHandler {
             volume_24h,
             liquidity,
             holders,
-            5,
             top_holders_display,
             risk_score_display,
         );
