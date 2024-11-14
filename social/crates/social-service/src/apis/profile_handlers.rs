@@ -175,9 +175,12 @@ pub struct LeaderboardQuery {
     #[serde(default = "default_time_range")]
     pub picked_after: TimeRange,
     pub group_id: Option<i64>,
+    #[serde(default)]
+    pub following: bool,
+    pub username: Option<String>,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Deserialize)]
 pub struct LeaderboardResponse {
     pub profiles: Vec<ProfileDetailsResponse>,
 }
@@ -196,6 +199,12 @@ pub(super) async fn leaderboard(
     State(app_state): State<Arc<AppState>>,
     Query(params): Query<LeaderboardQuery>,
 ) -> Result<(StatusCode, Json<LeaderboardResponse>), ApiError> {
+    if params.username.is_none() && params.following {
+        return Err(ApiError::BadRequest(
+            "Cannot use following without username".to_string(),
+        ));
+    }
+
     let leaderboard = app_state.profile_service.list_profiles(&params).await?;
     Ok((StatusCode::OK, leaderboard.into()))
 }

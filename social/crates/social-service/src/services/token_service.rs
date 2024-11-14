@@ -52,7 +52,7 @@ impl TokenService {
 
     fn generate_token_picks_cache_key(&self, params: &ListTokenPicksParams) -> String {
         format!(
-            "token_picks:{}:{}:{}:{}:{}:{}",
+            "token_picks:{}:{}:{}:{}:{}:{}:{}",
             params.user_id.unwrap_or(Uuid::nil()),
             params.page,
             params.limit,
@@ -60,7 +60,8 @@ impl TokenService {
             params.order_direction.clone().unwrap_or_default(),
             params
                 .picked_after
-                .map_or("none".to_string(), |t| t.to_rfc3339())
+                .map_or("none".to_string(), |t| t.to_rfc3339()),
+            params.following
         )
     }
 
@@ -89,6 +90,7 @@ impl TokenService {
                 .picked_after
                 .clone()
                 .map(|t| t.to_date_time(Utc::now().into())),
+            following: query.following,
         };
 
         let cache_key = self.generate_token_picks_cache_key(&params);
@@ -363,6 +365,7 @@ impl TokenService {
                 get_all: query.get_all,
                 group_ids: Some(groups.iter().map(|g| g.id).collect()),
                 picked_after: None,
+                following: false,
             })
             .await
             .map_err(ApiError::from)?;

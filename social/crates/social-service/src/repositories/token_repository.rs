@@ -34,6 +34,7 @@ pub struct ListTokenPicksParams {
     pub order_direction: Option<String>,
     pub get_all: bool,
     pub group_ids: Option<Vec<i64>>,
+    pub following: bool,
 }
 
 impl TokenRepository {
@@ -93,17 +94,24 @@ impl TokenRepository {
         let mut bind_idx = 1;
 
         if let Some(params) = params {
-            // Add picked_after condition if present
-            if let Some(picked_after) = params.picked_after {
-                where_clauses.push(format!("tp.call_date >= ${}", bind_idx));
-                bind_values.push(QueryValue::Timestamp(picked_after));
-                bind_idx += 1;
-            }
-
             // Add user_id condition if present
             if let Some(user_id) = params.user_id {
-                where_clauses.push(format!("tp.user_id = ${}", bind_idx));
-                bind_values.push(QueryValue::Uuid(user_id));
+                if params.following {
+                    where_clauses.push(format!("tp.user_id IN (SELECT followed_id FROM social.user_follows WHERE follower_id = ${bind_idx})"));
+                    bind_values.push(QueryValue::Uuid(user_id));
+                    bind_idx += 1;
+                } else {
+                    where_clauses.push(format!("tp.user_id = ${bind_idx}"));
+                    bind_values.push(QueryValue::Uuid(user_id));
+                    bind_idx += 1;
+                }
+            }
+
+            // Add picked_after condition if present
+            if let Some(picked_after) = params.picked_after {
+                where_clauses.push(format!("tp.call_date >= ${bind_idx}"));
+                bind_values.push(QueryValue::Timestamp(picked_after));
+                bind_idx += 1;
             }
         }
 
