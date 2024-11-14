@@ -17,6 +17,8 @@ pub struct ProfilePickSummary {
     pub hit_rate: Decimal,
     /// Total returns of a user's picks expressed as a multiple.
     pub pick_returns: Decimal,
+    /// Average return of a user's picks expressed as a multiple.
+    pub average_return: Decimal,
     /// Total realized PnL for that user's Bullpen wallet expressed as a dollar amount.
     pub realized_profit: Decimal,
 }
@@ -27,6 +29,7 @@ impl From<UserStats> for ProfilePickSummary {
             total_picks: stats.total_picks,
             hit_rate: stats.hit_rate,
             pick_returns: stats.pick_returns,
+            average_return: stats.average_pick_return,
             realized_profit: stats.realized_profit,
         }
     }
