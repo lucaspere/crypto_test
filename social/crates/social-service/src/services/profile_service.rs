@@ -2,6 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
+use rayon::prelude::*;
 use rust_decimal::{
     prelude::{One, Zero},
     Decimal,
@@ -81,13 +82,13 @@ impl ProfileService {
                 .group_id
                 .map_or(String::new(), |id| format!(":{}", id))
         );
-        if let Some(cached_response) = self
-            .redis_service
-            .get_cached::<ProfileDetailsResponse>(&cache_key)
-            .await?
-        {
-            return Ok(cached_response);
-        }
+        // if let Some(cached_response) = self
+        //     .redis_service
+        //     .get_cached::<ProfileDetailsResponse>(&cache_key)
+        //     .await?
+        // {
+        //     return Ok(cached_response);
+        // }
 
         info!(
             "Cache miss, fetching profile from database for username: {}",
@@ -98,22 +99,18 @@ impl ProfileService {
             .find_by_username(&params.username)
             .await?
             .ok_or(ApiError::UserNotFound)?;
+
         info!(
             "User found, fetching user picks and stats for username: {}",
             params.username
         );
-        let is_following = if let Some(user_id) = user_id {
-            if user_id == user.id {
-                None
-            } else {
-                self.user_repository
-                    .is_following(user_id, user.id)
-                    .await
-                    .ok()
-            }
-        } else {
-            None
+
+        let is_following = match user_id {
+            Some(id) if id == user.id => None,
+            Some(id) => self.user_repository.is_following(id, user.id).await.ok(),
+            None => None,
         };
+
         let (_, stats) = self
             .get_user_picks_and_stats(
                 &ProfilePicksAndStatsQuery {
@@ -203,25 +200,26 @@ impl ProfileService {
         .collect::<Result<Vec<_>, _>>()?;
         info!("Fetched {} profiles", profiles.len());
 
-        profiles.sort_by(|a, b| match params.sort {
-            Some(LeaderboardSort::PickReturns) => b
-                .pick_summary
-                .pick_returns
-                .cmp(&a.pick_summary.pick_returns),
-            Some(LeaderboardSort::HitRate) => b.pick_summary.hit_rate.cmp(&a.pick_summary.hit_rate),
-            Some(LeaderboardSort::RealizedProfit) => b
-                .pick_summary
-                .realized_profit
-                .cmp(&a.pick_summary.realized_profit),
-            Some(LeaderboardSort::TotalPicks) => {
-                b.pick_summary.total_picks.cmp(&a.pick_summary.total_picks)
+        let sort_key = |profile: &ProfileDetailsResponse| match params.sort {
+            Some(LeaderboardSort::PickReturns) => profile.pick_summary.pick_returns,
+            Some(LeaderboardSort::HitRate) => profile.pick_summary.hit_rate,
+            Some(LeaderboardSort::RealizedProfit) => profile.pick_summary.realized_profit,
+            Some(LeaderboardSort::TotalPicks) => Decimal::from(profile.pick_summary.total_picks),
+            Some(LeaderboardSort::AverageReturn) => profile.pick_summary.average_return,
+            Some(LeaderboardSort::GreatestHits) => profile.pick_summary.best_pick.multiplier,
+            _ => Decimal::ZERO,
+        };
+
+        profiles.par_sort_by(|a, b| {
+            if params.sort.is_none() {
+                a.username.cmp(&b.username)
+            } else {
+                sort_key(b)
+                    .cmp(&sort_key(a))
+                    .then(a.username.cmp(&b.username))
             }
-            Some(LeaderboardSort::AverageReturn) => b
-                .pick_summary
-                .average_return
-                .cmp(&a.pick_summary.average_return),
-            _ => a.username.cmp(&b.username),
         });
+
         info!("Sorted profiles");
         let response = LeaderboardResponse { profiles };
         self.redis_service
