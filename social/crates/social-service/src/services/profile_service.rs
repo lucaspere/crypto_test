@@ -138,12 +138,33 @@ impl ProfileService {
         params: &LeaderboardQuery,
     ) -> Result<LeaderboardResponse, ApiError> {
         info!("Listing profiles with params: {:?}", params);
+        let cache_key = format!(
+            "leaderboard:{}:{}{}:{}",
+            params.picked_after.to_string(),
+            params
+                .group_id
+                .map_or(String::new(), |id| format!(":{}", id)),
+            params.following,
+            params
+                .username
+                .clone()
+                .map_or(String::new(), |username| format!(":{}", username))
+        );
+        if let Some(cached_response) = self
+            .redis_service
+            .get_cached::<LeaderboardResponse>(&cache_key)
+            .await?
+        {
+            return Ok(cached_response);
+        }
         let tokens = self
             .token_service
             .list_token_picks(TokenQuery {
                 get_all: Some(true),
                 picked_after: Some(params.picked_after.clone()),
                 group_ids: params.group_id.map(|id| vec![id]),
+                following: params.following,
+                username: params.username.clone(),
                 ..Default::default()
             })
             .await?;
@@ -183,8 +204,11 @@ impl ProfileService {
             _ => a.username.cmp(&b.username),
         });
         info!("Sorted profiles");
-
-        Ok(LeaderboardResponse { profiles })
+        let response = LeaderboardResponse { profiles };
+        self.redis_service
+            .set_cached::<LeaderboardResponse>(&cache_key, &response, CACHE_TTL_SECONDS)
+            .await?;
+        Ok(response)
     }
 
     pub async fn get_user_picks_and_stats(

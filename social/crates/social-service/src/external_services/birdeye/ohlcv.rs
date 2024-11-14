@@ -1,6 +1,6 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::utils::api_errors::ApiError;
 
@@ -63,6 +63,7 @@ impl BirdeyeService {
             time_to: time_end,
         };
 
+        info!("Fetching OHLCV for address: {}, chain: {}, time_start: {}, time_end: {}, resolution: {}", address, chain, time_start, time_end, resolution);
         let response = self
             .client
             .get(BIRDEYE_OHLCV_URL)

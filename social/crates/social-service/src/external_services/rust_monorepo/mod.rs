@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use get_latest_w_metadata::LatestTokenMetadataResponse;
 use reqwest::Client;
+use tracing::info;
 
 use crate::utils::api_errors::ApiError;
 
@@ -27,6 +28,7 @@ impl RustMonorepoService {
     ) -> Result<HashMap<String, LatestTokenMetadataResponse>, ApiError> {
         let body = serde_json::to_string(&addresses)
             .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
+        info!("Sending data to rust monorepo: {:?}", body);
         let res = self
             .client
             .post(format!(
