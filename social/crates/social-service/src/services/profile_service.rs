@@ -7,6 +7,7 @@ use rust_decimal::{
     Decimal,
 };
 use tracing::info;
+use uuid::Uuid;
 
 use crate::{
     apis::{
@@ -66,6 +67,7 @@ impl ProfileService {
     pub async fn get_profile(
         &self,
         params: ProfileQuery,
+        user_id: Option<Uuid>,
     ) -> Result<ProfileDetailsResponse, ApiError> {
         info!(
             "Attempting to fetch profile for username: {}",
@@ -100,6 +102,18 @@ impl ProfileService {
             "User found, fetching user picks and stats for username: {}",
             params.username
         );
+        let is_following = if let Some(user_id) = user_id {
+            if user_id == user.id {
+                None
+            } else {
+                self.user_repository
+                    .is_following(user_id, user.id)
+                    .await
+                    .ok()
+            }
+        } else {
+            None
+        };
         let (_, stats) = self
             .get_user_picks_and_stats(
                 &ProfilePicksAndStatsQuery {
@@ -118,6 +132,7 @@ impl ProfileService {
             name: params.username.clone(),
             avatar_url: String::new(),
             pick_summary: ProfilePickSummary::from(stats),
+            is_following,
             ..Default::default()
         };
 
@@ -163,7 +178,7 @@ impl ProfileService {
                 get_all: Some(true),
                 picked_after: Some(params.picked_after.clone()),
                 group_ids: params.group_id.map(|id| vec![id]),
-                following: params.following,
+                following: params.following.then_some(true),
                 username: params.username.clone(),
                 ..Default::default()
             })
@@ -181,7 +196,7 @@ impl ProfileService {
                 picked_after: params.picked_after.clone(),
                 group_id: params.group_id,
             };
-            self.get_profile(query)
+            self.get_profile(query, params.user_id)
         }))
         .await
         .into_iter()

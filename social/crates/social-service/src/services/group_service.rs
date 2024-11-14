@@ -129,11 +129,14 @@ impl GroupService {
 
         if let Some(profile_service) = &self.profile_service.as_ref() {
             let profiles = join_all(group_members.iter().map(|g| {
-                profile_service.get_profile(ProfileQuery {
-                    username: g.username.clone(),
-                    picked_after: TimeRange::AllTime,
-                    group_id: Some(group_id),
-                })
+                profile_service.get_profile(
+                    ProfileQuery {
+                        username: g.username.clone(),
+                        picked_after: TimeRange::AllTime,
+                        group_id: Some(group_id),
+                    },
+                    None,
+                )
             }))
             .await
             .into_iter()

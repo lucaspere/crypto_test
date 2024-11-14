@@ -90,7 +90,7 @@ impl TokenService {
                 .picked_after
                 .clone()
                 .map(|t| t.to_date_time(Utc::now().into())),
-            following: query.following,
+            following: query.following.unwrap_or(false),
         };
 
         let cache_key = self.generate_token_picks_cache_key(&params);
@@ -365,7 +365,7 @@ impl TokenService {
                 get_all: query.get_all,
                 group_ids: Some(groups.iter().map(|g| g.id).collect()),
                 picked_after: None,
-                following: false,
+                following: None,
             })
             .await
             .map_err(ApiError::from)?;

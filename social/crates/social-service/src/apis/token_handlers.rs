@@ -40,7 +40,7 @@ pub struct TokenQuery {
     pub get_all: Option<bool>,
     pub group_ids: Option<Vec<i64>>,
     #[param(default = false)]
-    pub following: bool,
+    pub following: Option<bool>,
 }
 
 #[utoipa::path(

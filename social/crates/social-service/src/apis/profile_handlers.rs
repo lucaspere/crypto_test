@@ -16,6 +16,7 @@ use chrono::{DateTime, Duration, FixedOffset};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 pub const TAG: &str = "profile";
 
@@ -37,7 +38,7 @@ pub(super) async fn get_profile(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<ProfileQuery>,
 ) -> Result<(StatusCode, Json<ProfileDetailsResponse>), ApiError> {
-    let profile = app_state.profile_service.get_profile(query).await?;
+    let profile = app_state.profile_service.get_profile(query, None).await?;
     Ok((StatusCode::OK, profile.into()))
 }
 
@@ -182,6 +183,7 @@ pub struct LeaderboardQuery {
     #[serde(default)]
     pub following: bool,
     pub username: Option<String>,
+    pub user_id: Option<Uuid>,
 }
 
 #[derive(Serialize, ToSchema, Deserialize)]
