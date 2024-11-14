@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::user_stats::UserStats;
+use super::user_stats::{BestPick, UserStats};
 
 pub struct Profile;
 /// A summary of a user's picks (calls).
@@ -21,6 +21,8 @@ pub struct ProfilePickSummary {
     pub average_return: Decimal,
     /// Total realized PnL for that user's Bullpen wallet expressed as a dollar amount.
     pub realized_profit: Decimal,
+    /// [BestPick] performing pick.
+    pub best_pick: BestPick,
 }
 
 impl From<UserStats> for ProfilePickSummary {
@@ -31,6 +33,7 @@ impl From<UserStats> for ProfilePickSummary {
             pick_returns: stats.pick_returns,
             average_return: stats.average_pick_return,
             realized_profit: stats.realized_profit,
+            best_pick: stats.best_pick,
         }
     }
 }

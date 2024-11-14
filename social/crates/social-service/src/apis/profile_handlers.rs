@@ -169,6 +169,7 @@ pub enum LeaderboardSort {
     TotalPicks,
     MostRecentPick,
     AverageReturn,
+    GreatestHits,
 }
 
 #[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug, Default)]
