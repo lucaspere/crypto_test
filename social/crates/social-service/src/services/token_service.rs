@@ -369,7 +369,7 @@ impl TokenService {
             })
             .await
             .map_err(ApiError::from)?;
-        debug!("Fetched {:?} token picks", picks);
+
         let group_hash: HashMap<i64, &CreateOrUpdateGroup> =
             groups.iter().map(|g| (g.id, g)).collect();
         let map_group_id: HashMap<String, Vec<TokenPickResponse>> =
