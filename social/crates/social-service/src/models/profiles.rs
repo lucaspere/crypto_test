@@ -67,4 +67,6 @@ pub struct ProfileDetailsResponse {
     pub bio: String,
     /// User's tier
     pub tier: ProfileTier,
+    /// Is the user following the authenticated user
+    pub is_following: Option<bool>,
 }
