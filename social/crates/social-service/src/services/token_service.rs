@@ -15,9 +15,12 @@ use crate::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Token, TokenPickRequest},
     },
-    repositories::token_repository::{ListTokenPicksParams, TokenRepository},
+    repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
     services::user_service::UserService,
-    utils::api_errors::ApiError,
+    utils::{
+        api_errors::ApiError,
+        time::TimePeriod,
+    },
 };
 
 use super::{group_service::GroupService, redis_service::RedisService};
@@ -32,6 +35,8 @@ pub struct TokenService {
 }
 
 impl TokenService {
+    const MAX_PICK_LIMIT: i64 = 4;
+
     pub fn new(
         token_repository: Arc<TokenRepository>,
         rust_monorepo_service: Arc<RustMonorepoService>,
@@ -282,6 +287,12 @@ impl TokenService {
                 ApiError::InternalServerError("User not found".to_string())
             })?;
 
+        if self.has_user_reached_action_limit(&user.id).await? {
+            return Err(ApiError::InternalServerError(
+                "User reached the maximum number of picks".to_string(),
+            ));
+        }
+
         let token_info = self
             .rust_monorepo_service
             .get_latest_w_metadata(vec![pick.address.clone()])
@@ -397,6 +408,17 @@ impl TokenService {
                 acc
             });
         Ok((map_group_id, total))
+    }
+
+    pub async fn has_user_reached_action_limit(&self, user_id: &Uuid) -> Result<bool, ApiError> {
+        let max_limit = UserPickLimitScope::User(user_id.clone(), TimePeriod::Day);
+
+        let count = self
+            .token_repository
+            .count_user_picks_in_period(max_limit)
+            .await?;
+
+        Ok(count >= Self::MAX_PICK_LIMIT)
     }
 }
 

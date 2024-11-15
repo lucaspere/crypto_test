@@ -11,8 +11,12 @@ use crate::{
         token_picks::TokenPick,
         tokens::{Chain, Token},
     },
-    utils::api_errors::ApiError,
+    utils::{api_errors::ApiError, time::TimePeriod},
 };
+
+pub enum UserPickLimitScope {
+    User(Uuid, TimePeriod),
+}
 
 pub struct TokenRepository {
     db: Arc<PgPool>,
@@ -363,6 +367,27 @@ impl TokenRepository {
 
         Ok(())
     }
+
+    pub async fn count_user_picks_in_period(
+        &self,
+        scope: UserPickLimitScope,
+    ) -> Result<i64, ApiError> {
+        let query = match scope {
+            UserPickLimitScope::User(user_id, time_period) => sqlx::query_scalar(
+                r#"
+                    SELECT COUNT(*)
+                    FROM social.token_picks
+                    WHERE user_id = $1
+                    AND call_date >= $2
+                    "#,
+            )
+            .bind(user_id)
+            .bind(time_period.datetime().fixed_offset()),
+        };
+
+        let count = query.fetch_one(self.db.as_ref()).await?;
+        Ok(count)
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -370,7 +395,6 @@ struct From {
     id: i64,
 }
 
-// Helper enum for query parameter binding
 enum QueryValue {
     Timestamp(DateTime<FixedOffset>),
     Uuid(Uuid),
