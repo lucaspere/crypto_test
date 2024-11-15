@@ -306,7 +306,17 @@ impl TokenRepository {
 
     pub async fn save_token_pick(&self, pick: TokenPick) -> Result<TokenPick, sqlx::Error> {
         let query = r#"
-			INSERT INTO social.token_picks (user_id, group_id, token_address, price_at_call, market_cap_at_call, supply_at_call, call_date, highest_market_cap, hit_date)
+			INSERT INTO social.token_picks (
+				user_id,
+				group_id,
+				token_address,
+				price_at_call,
+				market_cap_at_call,
+				supply_at_call,
+				call_date,
+				highest_market_cap,
+				hit_date
+			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id
 		"#;

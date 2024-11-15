@@ -27,6 +27,7 @@ pub struct TokenPick {
     pub supply_at_call: Option<Decimal>,
     pub call_date: DateTime<FixedOffset>,
     pub highest_market_cap: Option<Decimal>,
+    pub highest_multiplier: Option<Decimal>,
     pub hit_date: Option<DateTime<FixedOffset>>,
 }
 

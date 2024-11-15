@@ -89,46 +89,6 @@ fn default_time_range() -> TimeRange {
     TimeRange::Month
 }
 
-//     get,
-//     tag = TAG,
-//     path = "/user-stats",
-//     responses(
-//         (status = 200, description = "User stats", body = UserStats),
-//         (status = 500, description = "Internal server error", body = ErrorResponse)
-//     ),
-//     params((
-//         "username" = String,
-//         Query,
-//         description = "Username"
-//     ))
-// )]
-// pub(super) async fn get_user_stats(
-//     State(app_state): State<Arc<AppState>>,
-//     Query(query): Query<ProfileQuery>,
-// ) -> impl IntoResponse {
-//     StatusCode::OK.into_response()
-// }
-
-// #[utoipa::path(
-//     get,
-//     tag = TAG,
-//     path = "/user-picks",
-//     responses(
-//         (status = 200, description = "User picks", body = UserPicksResponse),
-//         (status = 500, description = "Internal server error", body = ErrorResponse)
-//     ),
-//     params((
-//         "username" = String,
-//         Query,
-//         description = "Username"
-//     ))
-// )]
-// pub(super) async fn get_user_picks(
-//     State(app_state): State<Arc<AppState>>,
-//     Query(username): Query<String>,
-// ) -> impl IntoResponse {
-//     StatusCode::OK.into_response()
-// }
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct ProfilePicksAndStatsResponse {
     picks: Vec<TokenPickResponse>,
