@@ -128,11 +128,10 @@ impl TokenPickHandler {
             _ => String::new(),
         };
 
-        let market_cap = token_price_metadata
-            .metadata
-            .mc
-            .as_ref()
-            .and_then(|mc| mc.parse::<f64>().ok())
+        let market_cap = event_data
+            .token_pick
+            .market_cap_at_call
+            .to_f64()
             .map(|mc| format_number_with_metric_prefix(mc))
             .unwrap_or_else(|| "-.-".to_string());
 
@@ -214,7 +213,7 @@ impl TokenPickHandler {
             r#"
 	Ticker: {}
 	Market Cap at Call: <code>{}</code>
-	Price at Call: <code>{}</code>
+	Price at Call: <code>{}</code>"
 	1h: <code>{}</code> 4h: <code>{}</code> 24h: <code>{}</code>
 
 	Volume (24h): <code>${}</code>
