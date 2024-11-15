@@ -225,7 +225,13 @@ impl TokenService {
             }
             has_update = true;
         }
-
+        pick.highest_multiplier = Some(
+            calculate_return(
+                &pick.market_cap_at_call,
+                &pick.highest_market_cap.unwrap_or_default(),
+            )
+            .round_dp(2),
+        );
         let mut pick_response = TokenPickResponse::from(pick.clone());
         pick_response.volume_24h = latest_price.metadata.v_24h_usd;
         pick_response.liquidity = latest_price.metadata.liquidity;
@@ -255,7 +261,10 @@ impl TokenService {
         Ok(pick_response)
     }
 
-    pub async fn save_token_pick(&self, pick: TokenPickRequest) -> Result<TokenPick, ApiError> {
+    pub async fn save_token_pick(
+        &self,
+        pick: TokenPickRequest,
+    ) -> Result<TokenPickResponse, ApiError> {
         info!(
             "Saving token pick for user {} and token {}",
             pick.telegram_user_id, pick.address
@@ -328,7 +337,11 @@ impl TokenService {
             .delete_pattern(&list_cache_pattern)
             .await?;
 
-        Ok(token_pick)
+        let mut pick_response: TokenPickResponse = token_pick.into();
+        pick_response.volume_24h = token_info.metadata.v_24h_usd;
+        pick_response.liquidity = token_info.metadata.liquidity;
+
+        Ok(pick_response)
     }
 
     pub async fn list_token_picks_group(

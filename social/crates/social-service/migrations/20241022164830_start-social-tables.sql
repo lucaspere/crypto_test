@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS social.token_picks (
     market_cap_at_call numeric(36,18),
     supply_at_call numeric(36,18),
     highest_market_cap numeric(36,18),
+    highest_multiplier numeric(10,2),
     hit_date timestamp with time zone,
     call_date timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT token_picks_group_id_fkey FOREIGN KEY (group_id)
@@ -94,12 +95,34 @@ CREATE TABLE IF NOT EXISTS social.point_transactions (
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Add trigger function
+CREATE OR REPLACE FUNCTION social.update_highest_multiplier()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.highest_multiplier := CASE
+        WHEN NEW.highest_market_cap IS NULL OR NEW.market_cap_at_call IS NULL THEN NULL
+        WHEN NEW.market_cap_at_call = 0 THEN NULL
+        ELSE NEW.highest_market_cap / NEW.market_cap_at_call
+    END;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger
+CREATE TRIGGER update_highest_multiplier_trigger
+    BEFORE INSERT OR UPDATE OF highest_market_cap, market_cap_at_call
+    ON social.token_picks
+    FOR EACH ROW
+    EXECUTE FUNCTION social.update_highest_multiplier();
 
 
 -- Create useful indexes
 CREATE INDEX idx_token_picks_user_id ON social.token_picks(user_id);
+CREATE INDEX idx_token_picks_group_id ON social.token_picks(group_id);
 CREATE INDEX idx_token_picks_token_address ON social.token_picks(token_address);
 CREATE INDEX idx_token_picks_call_date ON social.token_picks(call_date);
+CREATE INDEX idx_token_picks_highest_multiplier ON social.token_picks(highest_multiplier);
+CREATE INDEX idx_token_picks_hit_date ON social.token_picks(hit_date);
 
 CREATE INDEX idx_user_follows_follower_id ON social.user_follows(follower_id);
 CREATE INDEX idx_user_follows_followed_id ON social.user_follows(followed_id);
@@ -120,9 +143,15 @@ CREATE INDEX idx_group_users_user_id ON social.group_users(user_id);
 
 -- migrate:down
 
+DROP TRIGGER IF EXISTS update_highest_multiplier_trigger ON social.token_picks;
+DROP FUNCTION IF EXISTS social.update_highest_multiplier();
+
 DROP INDEX IF EXISTS idx_token_picks_user_id;
+DROP INDEX IF EXISTS idx_token_picks_group_id;
 DROP INDEX IF EXISTS idx_token_picks_token_address;
 DROP INDEX IF EXISTS idx_token_picks_call_date;
+DROP INDEX IF EXISTS idx_token_picks_highest_multiplier;
+DROP INDEX IF EXISTS idx_token_picks_hit_date;
 DROP INDEX IF EXISTS idx_user_follows_follower_id;
 DROP INDEX IF EXISTS idx_user_follows_followed_id;
 DROP INDEX IF EXISTS idx_user_tiers_user_id;

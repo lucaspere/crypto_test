@@ -33,8 +33,6 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
         .routes(routes!(profile_handlers::get_profile))
         .routes(routes!(profile_handlers::get_profile_picks_and_stats))
         .routes(routes!(profile_handlers::leaderboard));
-    // .routes(routes!(profile_handlers::get_user_stats))
-    // .routes(routes!(profile_handlers::get_user_picks));
 
     let user_router = OpenApiRouter::new()
         .routes(routes!(user_handlers::follow_user))
