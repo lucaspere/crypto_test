@@ -14,7 +14,7 @@ use std::{collections::HashMap, sync::Arc};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use super::api_models::response::PaginatedTokenPickResponse;
+use super::api_models::{query::PickLeaderboardSort, response::PaginatedTokenPickResponse};
 
 pub const TAG: &str = "token";
 
@@ -89,7 +89,7 @@ pub struct TokenGroupQuery {
     pub page: u32,
     #[param(default = 10)]
     pub limit: u32,
-    pub order_by: Option<String>,
+    pub order_by: Option<PickLeaderboardSort>,
     pub order_direction: Option<String>,
     #[param(default = false)]
     pub get_all: Option<bool>,

@@ -198,7 +198,7 @@ impl TokenPickHandler {
 
         // Format top holders
         let (top_holders_display, _total_top_k_percentages) =
-            format_top_holders(rugcheck_report_data, Some(&address), 5);
+            format_top_holders(rugcheck_report_data, 5);
 
         // Format market cap at call time
         let formatted_market_cap_at_call =
@@ -336,7 +336,6 @@ pub struct TopHolder {
 
 fn format_top_holders(
     rugcheck_report_data: Option<TokenReportData>,
-    mint_address: Option<&str>,
     num_top_holders: usize,
 ) -> (String, f64) {
     match rugcheck_report_data {

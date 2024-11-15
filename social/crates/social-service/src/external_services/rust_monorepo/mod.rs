@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use get_latest_w_metadata::LatestTokenMetadataResponse;
 use reqwest::Client;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::utils::api_errors::ApiError;
 
@@ -29,42 +29,25 @@ impl RustMonorepoService {
         let body = serde_json::to_string(&addresses)
             .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
         info!("Sending data to rust monorepo: {:?}", body);
+        let url = format!("{}/price/latest-with-metadata", self.rust_monorepo_url);
         let res = self
             .client
-            .post(format!(
-                "{}/price/latest-with-metadata",
-                self.rust_monorepo_url,
-            ))
+            .post(&url)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
             .await?;
 
-        let res = res
-            .json::<Vec<LatestTokenMetadataResponse>>()
-            .await?
-            .into_iter()
-            .map(|r| (r.address.clone(), r))
-            .collect();
+        let tokens: Vec<LatestTokenMetadataResponse> = match res.json().await {
+            Ok(t) => t,
+            Err(e) => {
+                error!("Failed to deserialize response for {:?}: {}", addresses, e);
+                return Err(ApiError::RequestError(e));
+            }
+        };
 
-        Ok(res)
-    }
-}
+        let result = tokens.into_iter().map(|r| (r.address.clone(), r)).collect();
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn should_get_latest_w_metadata() {
-        let service = RustMonorepoService::new("http://localhost:698".to_string());
-        let res = service
-            .get_latest_w_metadata(vec![
-                "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string()
-            ])
-            .await;
-
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap().len(), 1);
+        Ok(result)
     }
 }

@@ -19,6 +19,7 @@ use crate::{
 
 use super::{
     api_models::{
+        query::PickLeaderboardSort,
         request::CreateGroupRequest,
         response::{
             GroupResponse, LeaderboardGroupResponse, PaginatedGroupMembersResponse,
@@ -121,7 +122,7 @@ pub struct GroupPicksQuery {
     pub page: u32,
     #[param(default = 10)]
     pub limit: u32,
-    pub order_by: Option<String>,
+    pub order_by: Option<PickLeaderboardSort>,
     pub order_direction: Option<String>,
 }
 

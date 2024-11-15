@@ -24,7 +24,7 @@ pub struct TokenQuery {
     pub page: u32,
     #[param(default = 10)]
     pub limit: u32,
-    pub order_by: Option<String>,
+    pub order_by: Option<PickLeaderboardSort>,
     pub order_direction: Option<String>,
     #[param(default = false)]
     pub get_all: Option<bool>,
@@ -53,7 +53,7 @@ pub struct GroupPicksQuery {
     pub page: u32,
     #[param(default = 10)]
     pub limit: u32,
-    pub order_by: Option<String>,
+    pub order_by: Option<ProfileLeaderboardSort>,
     pub order_direction: Option<String>,
 }
 
@@ -64,7 +64,7 @@ pub struct GroupMembersQuery {
     pub page: u32,
     #[param(default = 10)]
     pub limit: u32,
-    pub order_by: Option<String>,
+    pub order_by: Option<ProfileLeaderboardSort>,
     pub order_direction: Option<String>,
 }
 
@@ -96,4 +96,14 @@ pub enum PickLeaderboardSort {
     Newest,
     #[default]
     Reached,
+}
+
+impl ToString for PickLeaderboardSort {
+    fn to_string(&self) -> String {
+        match self {
+            PickLeaderboardSort::Hosttest => "hosttest".to_string(),
+            PickLeaderboardSort::Newest => "call_date".to_string(),
+            PickLeaderboardSort::Reached => "highest_multiplier".to_string(),
+        }
+    }
 }

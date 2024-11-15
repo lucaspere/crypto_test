@@ -7,6 +7,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
+    apis::api_models::query::PickLeaderboardSort,
     models::{
         token_picks::TokenPick,
         tokens::{Chain, Token},
@@ -34,7 +35,7 @@ pub struct ListTokenPicksParams {
     pub picked_after: Option<DateTime<FixedOffset>>,
     pub page: u32,
     pub limit: u32,
-    pub order_by: Option<String>,
+    pub order_by: Option<PickLeaderboardSort>,
     pub order_direction: Option<String>,
     pub get_all: bool,
     pub group_ids: Option<Vec<i64>>,
@@ -132,7 +133,7 @@ impl TokenRepository {
         if let Some(params) = params {
             if let Some(order_by) = &params.order_by {
                 let direction = params.order_direction.as_deref().unwrap_or("ASC");
-                base_query += &format!(" ORDER BY {} {}", order_by, direction);
+                base_query += &format!(" ORDER BY {} {}", order_by.to_string(), direction);
             } else {
                 base_query += " ORDER BY call_date DESC";
             }
@@ -212,7 +213,7 @@ impl TokenRepository {
         if let Some(params) = params {
             if let Some(order_by) = &params.order_by {
                 let direction = params.order_direction.as_deref().unwrap_or("ASC");
-                base_query += &format!(" ORDER BY {} {}", order_by, direction);
+                base_query += &format!(" ORDER BY {} {}", order_by.to_string(), direction);
             } else {
                 base_query += " ORDER BY call_date DESC";
             }

@@ -146,7 +146,7 @@ impl GroupService {
             let mut group_members_response = GroupMembersResponse {
                 members: profiles,
                 group_name,
-                group_id: group_id,
+                group_id,
                 total,
             };
 
