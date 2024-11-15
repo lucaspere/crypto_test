@@ -111,6 +111,10 @@ pub struct TokenPickResponse {
     pub hit_date: Option<DateTime<FixedOffset>>,
     /// The logo URI
     pub logo_uri: Option<String>,
+    /// Volume 24h
+    pub volume_24h: Option<Decimal>,
+    /// Liquidity
+    pub liquidity: Option<Decimal>,
 }
 
 impl From<TokenPick> for TokenPickResponse {

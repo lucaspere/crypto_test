@@ -227,6 +227,8 @@ impl TokenService {
         }
 
         let mut pick_response = TokenPickResponse::from(pick.clone());
+        pick_response.volume_24h = latest_price.metadata.v_24h_usd;
+        pick_response.liquidity = latest_price.metadata.liquidity;
         pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
         pick_response.current_market_cap = current_market_cap.round_dp(2);
         pick_response.current_multiplier =
