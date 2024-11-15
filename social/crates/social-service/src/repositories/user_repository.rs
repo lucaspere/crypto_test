@@ -103,7 +103,7 @@ impl UserRepository {
         GROUP BY u.id
         "#;
 
-        let followers = sqlx::query_as::<_, User>(&query)
+        let followers = sqlx::query_as::<_, User>(query)
             .bind(user_id)
             .fetch_all(self.db.as_ref())
             .await?;
@@ -127,7 +127,7 @@ impl UserRepository {
         GROUP BY u.id
         "#;
 
-        let following = sqlx::query_as::<_, User>(&query)
+        let following = sqlx::query_as::<_, User>(query)
             .bind(user_id)
             .fetch_all(self.db.as_ref())
             .await?;

@@ -1,4 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fmt::Display,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use chrono::{DateTime, Duration, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
@@ -53,14 +56,14 @@ impl TimePeriod {
     }
 }
 
-impl ToString for TimePeriod {
-    fn to_string(&self) -> String {
+impl Display for TimePeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TimePeriod::SixHours => "six_hours".to_string(),
-            TimePeriod::Day => "day".to_string(),
-            TimePeriod::Week => "week".to_string(),
-            TimePeriod::Month => "month".to_string(),
-            TimePeriod::AllTime => "all_time".to_string(),
+            TimePeriod::SixHours => write!(f, "six_hours"),
+            TimePeriod::Day => write!(f, "day"),
+            TimePeriod::Week => write!(f, "week"),
+            TimePeriod::Month => write!(f, "month"),
+            TimePeriod::AllTime => write!(f, "all_time"),
         }
     }
 }

@@ -58,7 +58,7 @@ impl TokenService {
             params.user_id.unwrap_or(Uuid::nil()),
             params.page,
             params.limit,
-            params.order_by.clone().unwrap_or_default(),
+            params.order_by.unwrap_or_default().to_string(),
             params.order_direction.clone().unwrap_or_default(),
             params
                 .picked_after
@@ -160,7 +160,7 @@ impl TokenService {
             return Ok(cached_pick);
         }
 
-        let processed_pick = self.process_single_pick(pick).await?;
+        let processed_pick = self.process_single_pick(pick).await.unwrap_or_default();
 
         if let Err(e) = self
             .redis_service
@@ -180,7 +180,14 @@ impl TokenService {
         let latest_prices = self
             .rust_monorepo_service
             .get_latest_w_metadata(vec![pick.token.address.clone()])
-            .await?;
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to fetch latest metadata for token pick {}: {}",
+                    pick.id, e
+                );
+                ApiError::InternalServerError("Failed to fetch latest metadata".to_string())
+            })?;
 
         let latest_price = latest_prices
             .get(&pick.token.address)
@@ -198,7 +205,11 @@ impl TokenService {
                     Utc::now().timestamp(),
                     "1H",
                 )
-                .await?;
+                .await
+                .map_err(|e| {
+                    error!("Failed to fetch OHLCV for token pick {}: {}", pick.id, e);
+                    ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
+                })?;
 
             pick.highest_market_cap = Some(ohlcv.high);
             let hit_2x =
@@ -248,7 +259,7 @@ impl TokenService {
 
         if has_update || pick_response.highest_mult_post_call > 2.0 {
             info!("Updating highest market cap for token pick {}", pick.id);
-            let hit_date = pick.hit_date.take().map(|d| d.into());
+            let hit_date = pick.hit_date.take().map(|d| d);
             if let Err(e) = self
                 .token_repository
                 .update_highest_market_cap(pick.id, pick.highest_market_cap.unwrap(), hit_date)
@@ -408,7 +419,7 @@ impl TokenService {
     }
 
     pub async fn has_user_reached_action_limit(&self, user_id: &Uuid) -> Result<bool, ApiError> {
-        let max_limit = UserPickLimitScope::User(user_id.clone(), TimePeriod::Day);
+        let max_limit = UserPickLimitScope::User(*user_id, TimePeriod::Day);
 
         let count = self
             .token_repository
