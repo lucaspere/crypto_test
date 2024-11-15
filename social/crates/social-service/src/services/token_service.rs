@@ -8,7 +8,7 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
-    apis::token_handlers::{TokenGroupQuery, TokenQuery},
+    apis::{api_models::query::TokenQuery, token_handlers::TokenGroupQuery},
     external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
     models::{
         groups::CreateOrUpdateGroup,
@@ -17,10 +17,7 @@ use crate::{
     },
     repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
     services::user_service::UserService,
-    utils::{
-        api_errors::ApiError,
-        time::TimePeriod,
-    },
+    utils::{api_errors::ApiError, time::TimePeriod},
 };
 
 use super::{group_service::GroupService, redis_service::RedisService};

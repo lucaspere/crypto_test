@@ -1,10 +1,15 @@
 use crate::{
+    apis::api_models::query::ProfileLeaderboardQuery,
     models::{
         profiles::ProfileDetailsResponse,
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         user_stats::UserStats,
     },
-    utils::{api_errors::ApiError, ErrorResponse},
+    utils::{
+        api_errors::ApiError,
+        time::{default_time_period, TimePeriod},
+        ErrorResponse,
+    },
     AppState,
 };
 use axum::{
@@ -12,11 +17,11 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use chrono::{DateTime, Duration, FixedOffset};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::{IntoParams, ToSchema};
-use uuid::Uuid;
+use utoipa::ToSchema;
+
+use super::api_models::response::LeaderboardResponse;
 
 pub const TAG: &str = "profile";
 
@@ -42,51 +47,12 @@ pub(super) async fn get_profile(
     Ok((StatusCode::OK, profile.into()))
 }
 
-#[derive(Deserialize, ToSchema, Debug, Clone, Serialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum TimeRange {
-    SixHours,
-    Day,
-    Week,
-    #[default]
-    Month,
-    AllTime,
-}
-
-impl TimeRange {
-    pub fn to_date_time(&self, now: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
-        match self {
-            TimeRange::SixHours => now - Duration::hours(6),
-            TimeRange::Day => now - Duration::days(1),
-            TimeRange::Week => now - Duration::weeks(1),
-            TimeRange::Month => now - Duration::days(30),
-            TimeRange::AllTime => now - Duration::days(365),
-        }
-    }
-}
-
-impl ToString for TimeRange {
-    fn to_string(&self) -> String {
-        match self {
-            TimeRange::SixHours => "six_hours".to_string(),
-            TimeRange::Day => "day".to_string(),
-            TimeRange::Week => "week".to_string(),
-            TimeRange::Month => "month".to_string(),
-            TimeRange::AllTime => "all_time".to_string(),
-        }
-    }
-}
-
 #[derive(Deserialize, ToSchema, Debug, Clone)]
 pub struct ProfileQuery {
     pub username: String,
-    #[serde(default = "default_time_range")]
-    pub picked_after: TimeRange,
+    #[serde(default = "default_time_period")]
+    pub picked_after: TimePeriod,
     pub group_id: Option<i64>,
-}
-
-fn default_time_range() -> TimeRange {
-    TimeRange::Month
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -119,38 +85,6 @@ pub(super) async fn get_profile_picks_and_stats(
         Json(ProfilePicksAndStatsResponse { picks, stats }),
     ))
 }
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum LeaderboardSort {
-    #[default]
-    PickReturns,
-    HitRate,
-    RealizedProfit,
-    TotalPicks,
-    MostRecentPick,
-    AverageReturn,
-    GreatestHits,
-}
-
-#[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug, Default)]
-pub struct LeaderboardQuery {
-    #[serde(default)]
-    pub sort: Option<LeaderboardSort>,
-    #[serde(default)]
-    pub order: Option<String>,
-    #[serde(default = "default_time_range")]
-    pub picked_after: TimeRange,
-    pub group_id: Option<i64>,
-    #[serde(default)]
-    pub following: bool,
-    pub username: Option<String>,
-    pub user_id: Option<Uuid>,
-}
-
-#[derive(Serialize, ToSchema, Deserialize)]
-pub struct LeaderboardResponse {
-    pub profiles: Vec<ProfileDetailsResponse>,
-}
 
 #[utoipa::path(
     get,
@@ -160,11 +94,11 @@ pub struct LeaderboardResponse {
         (status = 200, description = "Leaderboard", body = LeaderboardResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     ),
-    params(LeaderboardQuery)
+    params(ProfileLeaderboardQuery)
 )]
 pub(super) async fn leaderboard(
     State(app_state): State<Arc<AppState>>,
-    Query(params): Query<LeaderboardQuery>,
+    Query(params): Query<ProfileLeaderboardQuery>,
 ) -> Result<(StatusCode, Json<LeaderboardResponse>), ApiError> {
     if params.username.is_none() && params.following {
         return Err(ApiError::BadRequest(

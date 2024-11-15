@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rayon::prelude::*;
+use rayon::slice::ParallelSliceMut;
 use rust_decimal::{
     prelude::{One, Zero},
     Decimal,
@@ -12,8 +12,11 @@ use uuid::Uuid;
 
 use crate::{
     apis::{
-        profile_handlers::{LeaderboardQuery, LeaderboardResponse, LeaderboardSort, ProfileQuery},
-        token_handlers::TokenQuery,
+        api_models::{
+            query::{ProfileLeaderboardQuery, ProfileLeaderboardSort, TokenQuery},
+            response::LeaderboardResponse,
+        },
+        profile_handlers::ProfileQuery,
     },
     external_services::{
         birdeye::BirdeyeService, cielo::CieloService, rust_monorepo::RustMonorepoService,
@@ -143,7 +146,7 @@ impl ProfileService {
 
     pub async fn list_profiles(
         &self,
-        params: &LeaderboardQuery,
+        params: &ProfileLeaderboardQuery,
     ) -> Result<LeaderboardResponse, ApiError> {
         info!("Listing profiles with params: {:?}", params);
         let cache_key = format!(
@@ -197,12 +200,14 @@ impl ProfileService {
         info!("Fetched {} profiles", profiles.len());
 
         let sort_key = |profile: &ProfileDetailsResponse| match params.sort {
-            Some(LeaderboardSort::PickReturns) => profile.pick_summary.pick_returns,
-            Some(LeaderboardSort::HitRate) => profile.pick_summary.hit_rate,
-            Some(LeaderboardSort::RealizedProfit) => profile.pick_summary.realized_profit,
-            Some(LeaderboardSort::TotalPicks) => Decimal::from(profile.pick_summary.total_picks),
-            Some(LeaderboardSort::AverageReturn) => profile.pick_summary.average_return,
-            Some(LeaderboardSort::GreatestHits) => profile.pick_summary.best_pick.multiplier,
+            Some(ProfileLeaderboardSort::PickReturns) => profile.pick_summary.pick_returns,
+            Some(ProfileLeaderboardSort::HitRate) => profile.pick_summary.hit_rate,
+            Some(ProfileLeaderboardSort::RealizedProfit) => profile.pick_summary.realized_profit,
+            Some(ProfileLeaderboardSort::TotalPicks) => {
+                Decimal::from(profile.pick_summary.total_picks)
+            }
+            Some(ProfileLeaderboardSort::AverageReturn) => profile.pick_summary.average_return,
+            Some(ProfileLeaderboardSort::GreatestHits) => profile.pick_summary.best_pick.multiplier,
             _ => Decimal::ZERO,
         };
 

@@ -4,13 +4,13 @@ use uuid::Uuid;
 
 use crate::{
     apis::{
-        api_models::response::GroupMembersResponse,
+        api_models::{query::ProfileLeaderboardSort, response::GroupMembersResponse},
         group_handlers::{AddUserRequest, ListGroupsQuery},
-        profile_handlers::{LeaderboardSort, ProfileQuery, TimeRange},
+        profile_handlers::ProfileQuery,
     },
     models::groups::{CreateOrUpdateGroup, Group, GroupUser},
     repositories::group_repository::GroupRepository,
-    utils::api_errors::ApiError,
+    utils::{api_errors::ApiError, time::TimePeriod},
 };
 
 use super::{profile_service::ProfileService, user_service::UserService};
@@ -121,7 +121,7 @@ impl GroupService {
         group_id: i64,
         limit: u32,
         page: u32,
-        sort: Option<LeaderboardSort>,
+        sort: Option<ProfileLeaderboardSort>,
     ) -> Result<GroupMembersResponse, ApiError> {
         let (group_members, group_name, total) = self
             .repository
@@ -133,7 +133,7 @@ impl GroupService {
                 profile_service.get_profile(
                     ProfileQuery {
                         username: g.username.clone(),
-                        picked_after: TimeRange::AllTime,
+                        picked_after: TimePeriod::AllTime,
                         group_id: Some(group_id),
                     },
                     None,
@@ -152,18 +152,18 @@ impl GroupService {
 
             if let Some(sort) = sort {
                 group_members_response.members.sort_by(|a, b| match sort {
-                    LeaderboardSort::PickReturns => b
+                    ProfileLeaderboardSort::PickReturns => b
                         .pick_summary
                         .pick_returns
                         .cmp(&a.pick_summary.pick_returns),
-                    LeaderboardSort::HitRate => {
+                    ProfileLeaderboardSort::HitRate => {
                         b.pick_summary.hit_rate.cmp(&a.pick_summary.hit_rate)
                     }
-                    LeaderboardSort::RealizedProfit => b
+                    ProfileLeaderboardSort::RealizedProfit => b
                         .pick_summary
                         .realized_profit
                         .cmp(&a.pick_summary.realized_profit),
-                    LeaderboardSort::TotalPicks => {
+                    ProfileLeaderboardSort::TotalPicks => {
                         b.pick_summary.total_picks.cmp(&a.pick_summary.total_picks)
                     }
                     _ => a.username.cmp(&b.username),

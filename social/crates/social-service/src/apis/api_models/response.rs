@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::models::{
@@ -69,3 +69,11 @@ impl From<Group> for GroupResponse {
         }
     }
 }
+
+#[derive(Serialize, ToSchema, Deserialize)]
+pub struct LeaderboardResponse {
+    pub profiles: Vec<ProfileDetailsResponse>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct LeaderboardGroupResponse(pub Vec<GroupMembersResponse>);
