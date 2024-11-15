@@ -23,7 +23,6 @@ use crate::{
         token_picks::{ProfilePicksAndStatsQuery, TokenPickResponse},
         tokens::Chain,
         user_stats::{BestPick, UserStats},
-        users::User,
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
     utils::api_errors::ApiError,
@@ -82,13 +81,13 @@ impl ProfileService {
                 .group_id
                 .map_or(String::new(), |id| format!(":{}", id))
         );
-        // if let Some(cached_response) = self
-        //     .redis_service
-        //     .get_cached::<ProfileDetailsResponse>(&cache_key)
-        //     .await?
-        // {
-        //     return Ok(cached_response);
-        // }
+        if let Some(cached_response) = self
+            .redis_service
+            .get_cached::<ProfileDetailsResponse>(&cache_key)
+            .await?
+        {
+            return Ok(cached_response);
+        }
 
         info!(
             "Cache miss, fetching profile from database for username: {}",
@@ -112,15 +111,12 @@ impl ProfileService {
         };
 
         let (_, stats) = self
-            .get_user_picks_and_stats(
-                &ProfilePicksAndStatsQuery {
-                    username: params.username.clone(),
-                    picked_after: Some(params.picked_after.clone()),
-                    multiplier: None,
-                    group_ids: params.group_id.map(|id| vec![id]),
-                },
-                Some(&user),
-            )
+            .get_user_picks_and_stats(&ProfilePicksAndStatsQuery {
+                username: params.username.clone(),
+                picked_after: Some(params.picked_after.clone()),
+                multiplier: None,
+                group_ids: params.group_id.map(|id| vec![id]),
+            })
             .await?;
 
         let response = ProfileDetailsResponse {
@@ -231,7 +227,6 @@ impl ProfileService {
     pub async fn get_user_picks_and_stats(
         &self,
         params: &ProfilePicksAndStatsQuery,
-        user: Option<&User>,
     ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
         info!("Getting user picks and stats for {}", params.username);
 
@@ -303,19 +298,27 @@ impl ProfileService {
         } else {
             Decimal::ZERO
         };
+        let user = self
+            .user_repository
+            .find_by_username(&params.username)
+            .await?
+            .ok_or(ApiError::UserNotFound)?;
+
+        info!(
+            "User found, fetching user picks and stats for username: {}",
+            params.username
+        );
         let mut realized_profit = Decimal::ZERO;
-        if let Some(user) = user {
-            if let Some(wallet) = user.wallet_addresses.as_ref().and_then(|wa| {
-                wa.iter()
-                    .filter(|w| w.address.is_some())
-                    .find(|w| w.chain == Some(Chain::Solana.to_string()))
-            }) {
-                let realized_pnl_usd = self
-                    .cielo_service
-                    .get_wallet_stats(wallet.address.as_ref().unwrap(), None)
-                    .await?;
-                realized_profit = realized_pnl_usd.realized_pnl_usd.round_dp(2);
-            }
+        if let Some(wallet) = user.wallet_addresses.as_ref().and_then(|wa| {
+            wa.iter()
+                .filter(|w| w.address.is_some())
+                .find(|w| w.chain == Some(Chain::Solana.to_string()))
+        }) {
+            let realized_pnl_usd = self
+                .cielo_service
+                .get_wallet_stats(wallet.address.as_ref().unwrap(), None)
+                .await?;
+            realized_profit = realized_pnl_usd.realized_pnl_usd.round_dp(2);
         }
         let stats = UserStats {
             total_picks,
