@@ -382,7 +382,7 @@ impl TokenRepository {
                     "#,
             )
             .bind(user_id)
-            .bind(time_period.datetime().fixed_offset()),
+            .bind(time_period.get_start_datetime().fixed_offset()),
         };
 
         let count = query.fetch_one(self.db.as_ref()).await?;

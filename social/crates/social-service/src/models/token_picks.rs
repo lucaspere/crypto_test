@@ -1,4 +1,4 @@
-use crate::apis::profile_handlers::TimeRange;
+use crate::utils::time::TimePeriod;
 
 use super::{
     tokens::Token,
@@ -154,6 +154,6 @@ impl From<TokenPick> for TokenPickResponse {
 pub struct ProfilePicksAndStatsQuery {
     pub username: String,
     pub multiplier: Option<u8>,
-    pub picked_after: Option<TimeRange>,
+    pub picked_after: Option<TimePeriod>,
     pub group_ids: Option<Vec<i64>>,
 }

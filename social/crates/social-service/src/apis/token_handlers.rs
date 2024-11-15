@@ -1,4 +1,5 @@
 use crate::{
+    apis::api_models::query::TokenQuery,
     models::{token_picks::TokenPickResponse, tokens::TokenPickRequest},
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
@@ -13,35 +14,9 @@ use std::{collections::HashMap, sync::Arc};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use super::profile_handlers::TimeRange;
+use super::api_models::response::PaginatedTokenPickResponse;
 
 pub const TAG: &str = "token";
-
-#[derive(serde::Serialize, ToSchema)]
-pub struct PaginatedTokenPickResponse {
-    pub items: Vec<TokenPickResponse>,
-    pub total: i64,
-    pub page: u32,
-    pub limit: u32,
-    pub total_pages: u32,
-}
-
-#[derive(Debug, Deserialize, IntoParams, Default)]
-pub struct TokenQuery {
-    pub username: Option<String>,
-    pub picked_after: Option<TimeRange>,
-    #[param(default = 1)]
-    pub page: u32,
-    #[param(default = 10)]
-    pub limit: u32,
-    pub order_by: Option<String>,
-    pub order_direction: Option<String>,
-    #[param(default = false)]
-    pub get_all: Option<bool>,
-    pub group_ids: Option<Vec<i64>>,
-    #[param(default = false)]
-    pub following: Option<bool>,
-}
 
 #[utoipa::path(
     get,

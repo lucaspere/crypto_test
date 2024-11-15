@@ -11,7 +11,7 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    apis::api_models::query::GroupMembersQuery,
+    apis::api_models::query::{GroupMembersQuery, ListGroupMembersQuery},
     models::groups::{CreateOrUpdateGroup, GroupUser},
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
@@ -20,10 +20,12 @@ use crate::{
 use super::{
     api_models::{
         request::CreateGroupRequest,
-        response::{GroupMembersResponse, GroupResponse, PaginatedGroupMembersResponse},
+        response::{
+            GroupResponse, LeaderboardGroupResponse, PaginatedGroupMembersResponse,
+            PaginatedTokenPickResponse,
+        },
     },
-    profile_handlers::LeaderboardSort,
-    token_handlers::{PaginatedTokenPickResponse, TokenGroupQuery},
+    token_handlers::TokenGroupQuery,
 };
 
 pub const GROUP_TAG: &str = "group";
@@ -273,15 +275,6 @@ pub async fn remove_user_from_group(
 
     Ok((StatusCode::OK, group_user.into()))
 }
-
-#[derive(Deserialize, IntoParams, Default)]
-pub struct ListGroupMembersQuery {
-    pub sort: Option<LeaderboardSort>,
-    pub user_id: Uuid,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct LeaderboardGroupResponse(Vec<GroupMembersResponse>);
 
 #[utoipa::path(
     get,
