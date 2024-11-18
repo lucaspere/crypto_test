@@ -1,4 +1,4 @@
-use crate::utils::time::TimePeriod;
+use crate::{repositories::token_repository::TokenPickRow, utils::time::TimePeriod};
 
 use super::{
     tokens::Token,
@@ -150,10 +150,36 @@ impl From<TokenPick> for TokenPickResponse {
     }
 }
 
-#[derive(Deserialize, Default, IntoParams)]
-pub struct ProfilePicksAndStatsQuery {
-    pub username: String,
-    pub multiplier: Option<u8>,
-    pub picked_after: Option<TimePeriod>,
-    pub group_ids: Option<Vec<i64>>,
+impl From<TokenPickRow> for TokenPickResponse {
+    fn from(row: TokenPickRow) -> Self {
+        let highest_mult_post_call = if let Some(highest_market_cap) = row.highest_market_cap {
+            if highest_market_cap.is_zero() || row.market_cap_at_call.is_zero() {
+                Decimal::zero()
+            } else {
+                highest_market_cap / row.market_cap_at_call
+            }
+        } else {
+            Decimal::zero()
+        }
+        .round_dp(2);
+        let highest_mult_post_call = highest_mult_post_call
+            .to_string()
+            .parse::<f32>()
+            .unwrap_or_default();
+
+        Self {
+            highest_mult_post_call,
+            call_date: row.call_date,
+            group_id: row.group_id,
+            id: row.id,
+            highest_mc_post_call: row.highest_market_cap.map(|mc| mc.round_dp(2)),
+            hit_date: row.hit_date,
+            market_cap_at_call: row.market_cap_at_call.round_dp(2),
+            token: Token {
+                address: row.token_address,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
 }
