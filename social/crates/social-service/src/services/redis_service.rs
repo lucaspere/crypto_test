@@ -1,4 +1,4 @@
-use redis::{aio::MultiplexedConnection, Client, RedisError};
+use redis::{aio::MultiplexedConnection, Client, Pipeline, RedisError};
 use serde::{de::DeserializeOwned, Serialize};
 
 pub struct RedisService {
@@ -75,6 +75,31 @@ impl RedisService {
                 .query_async(&mut connection)
                 .await?;
         }
+        Ok(())
+    }
+
+    pub async fn set_nx(
+        &self,
+        key: &str,
+        value: &str,
+        ttl_seconds: u64,
+    ) -> Result<bool, RedisError> {
+        let mut connection = self.connection.clone();
+        let result: i32 = redis::cmd("SET")
+            .arg(key)
+            .arg(value)
+            .arg("NX")
+            .arg("EX")
+            .arg(ttl_seconds)
+            .query_async(&mut connection)
+            .await?;
+
+        Ok(result == 1)
+    }
+
+    pub async fn execute_pipe(&self, pipe: Pipeline) -> Result<(), RedisError> {
+        let mut connection = self.connection.clone();
+        pipe.query_async(&mut connection).await?;
         Ok(())
     }
 }

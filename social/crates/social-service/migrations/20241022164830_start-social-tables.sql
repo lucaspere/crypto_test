@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS social.tokens (
     name character varying(255) NOT NULL,
     symbol character varying(50) NOT NULL,
     chain character varying(50) NOT NULL,
+    volume_24h numeric,
+    liquidity numeric,
+    logo_uri character varying(255),
     CONSTRAINT tokens_pkey PRIMARY KEY (address, chain)
 );
 

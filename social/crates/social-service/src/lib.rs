@@ -22,6 +22,7 @@ pub mod apis;
 pub mod container;
 pub mod events;
 pub mod external_services;
+pub mod jobs;
 pub mod models;
 pub mod repositories;
 pub mod services;
