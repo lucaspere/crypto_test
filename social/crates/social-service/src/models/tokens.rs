@@ -34,12 +34,21 @@ impl From<String> for Chain {
 
 #[derive(Clone, Debug, PartialEq, FromRow, Serialize, Deserialize, Default, ToSchema)]
 pub struct Token {
+    /// The token address
     pub address: String,
+    /// The token name
     pub name: String,
+    /// The token symbol
     pub symbol: String,
+    /// The token chain
     pub chain: String,
+    /// The token market cap
+    pub market_cap: Option<Decimal>,
+    /// The token volume 24h USD
     pub volume_24h: Option<Decimal>,
+    /// The token liquidity
     pub liquidity: Option<Decimal>,
+    /// The logo URI
     pub logo_uri: Option<String>,
 }
 
@@ -49,6 +58,7 @@ impl Token {
         name: String,
         symbol: String,
         chain: String,
+        market_cap: Option<Decimal>,
         volume_24h: Option<Decimal>,
         liquidity: Option<Decimal>,
         logo_uri: Option<String>,
@@ -58,6 +68,7 @@ impl Token {
             name,
             symbol,
             chain,
+            market_cap,
             volume_24h,
             liquidity,
             logo_uri,
@@ -72,6 +83,7 @@ impl From<LatestTokenMetadataResponse> for Token {
             token_info.metadata.name,
             token_info.metadata.symbol,
             Chain::Solana.to_string(),
+            Some(token_info.market_cap),
             token_info.metadata.v_24h_usd,
             token_info.metadata.liquidity,
             token_info.metadata.logo_uri,

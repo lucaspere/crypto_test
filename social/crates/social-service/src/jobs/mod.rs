@@ -7,7 +7,6 @@ use tracing::error;
 use crate::container::ServiceContainer;
 
 pub async fn start_background_jobs(app_state: Arc<ServiceContainer>) {
-    let app_state = app_state.clone();
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(600)); // 10 minutes
         interval.tick().await; // Add immediate first tick

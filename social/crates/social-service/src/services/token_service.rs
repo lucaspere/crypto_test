@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rust_decimal::{prelude::Zero, Decimal};
+use rust_decimal::Decimal;
 use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -22,7 +22,7 @@ use crate::{
         ListTokenPicksParams, TokenPickRow, TokenRepository, UserPickLimitScope,
     },
     services::user_service::UserService,
-    utils::{api_errors::ApiError, math::calculate_return, time::TimePeriod},
+    utils::{api_errors::ApiError, math::calculate_price_multiplier, time::TimePeriod},
 };
 
 use super::{group_service::GroupService, redis_service::RedisService};
@@ -165,7 +165,7 @@ impl TokenService {
             return Ok(cached_pick);
         }
 
-        let processed_pick = self.process_single_pick(pick).await.unwrap_or_default();
+        let processed_pick = TokenPickResponse::from(pick.clone());
 
         if let Err(e) = self
             .redis_service
@@ -217,8 +217,8 @@ impl TokenService {
                 })?;
 
             pick.highest_market_cap = Some(ohlcv.high);
-            let hit_2x =
-                calculate_return(&pick.market_cap_at_call, &ohlcv.high) >= Decimal::from(2);
+            let hit_2x = calculate_price_multiplier(&pick.market_cap_at_call, &ohlcv.high)
+                >= Decimal::from(2);
             if hit_2x {
                 pick.hit_date = Some(Utc::now().into());
             }
@@ -236,27 +236,24 @@ impl TokenService {
 
             pick.highest_market_cap = Some(current_market_cap);
 
-            let hit_2x =
-                calculate_return(&pick.market_cap_at_call, &current_market_cap) >= Decimal::from(2);
+            let hit_2x = calculate_price_multiplier(&pick.market_cap_at_call, &current_market_cap)
+                >= Decimal::from(2);
             if hit_2x {
                 pick.hit_date = Some(Utc::now().into());
             }
             has_update = true;
         }
         pick.highest_multiplier = Some(
-            calculate_return(
+            calculate_price_multiplier(
                 &pick.market_cap_at_call,
                 &pick.highest_market_cap.unwrap_or_default(),
             )
             .round_dp(2),
         );
         let mut pick_response = TokenPickResponse::from(pick.clone());
-        pick_response.volume_24h = latest_price.metadata.v_24h_usd;
-        pick_response.liquidity = latest_price.metadata.liquidity;
-        pick_response.logo_uri = latest_price.metadata.logo_uri.clone();
         pick_response.current_market_cap = current_market_cap.round_dp(2);
         pick_response.current_multiplier =
-            calculate_return(&pick.market_cap_at_call, &current_market_cap)
+            calculate_price_multiplier(&pick.market_cap_at_call, &current_market_cap)
                 .round_dp(2)
                 .to_string()
                 .parse::<f32>()
@@ -320,7 +317,7 @@ impl TokenService {
             has_update = true;
         }
         pick.highest_multiplier = Some(
-            calculate_return(
+            calculate_price_multiplier(
                 &pick.market_cap_at_call,
                 &pick.highest_market_cap.unwrap_or_default(),
             )
@@ -332,12 +329,9 @@ impl TokenService {
         }
 
         let mut pick_response = TokenPickResponse::from(pick.clone());
-        pick_response.volume_24h = metadata.metadata.v_24h_usd;
-        pick_response.liquidity = metadata.metadata.liquidity;
-        pick_response.logo_uri = metadata.metadata.logo_uri.clone();
         pick_response.current_market_cap = current_market_cap.round_dp(2);
         pick_response.current_multiplier =
-            calculate_return(&pick.market_cap_at_call, &current_market_cap)
+            calculate_price_multiplier(&pick.market_cap_at_call, &current_market_cap)
                 .round_dp(2)
                 .to_string()
                 .parse::<f32>()
@@ -428,9 +422,7 @@ impl TokenService {
             .delete_pattern(&list_cache_pattern)
             .await?;
 
-        let mut pick_response: TokenPickResponse = token_pick.into();
-        pick_response.volume_24h = token_info.metadata.v_24h_usd;
-        pick_response.liquidity = token_info.metadata.liquidity;
+        let pick_response: TokenPickResponse = token_pick.into();
 
         Ok(pick_response)
     }

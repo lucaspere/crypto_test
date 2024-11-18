@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS social.tokens (
     name character varying(255) NOT NULL,
     symbol character varying(50) NOT NULL,
     chain character varying(50) NOT NULL,
+    market_cap numeric(36,18),
     volume_24h numeric,
     liquidity numeric,
     logo_uri character varying(255),
@@ -120,29 +121,32 @@ CREATE TRIGGER update_highest_multiplier_trigger
 
 
 -- Create useful indexes
-CREATE INDEX idx_token_picks_user_id ON social.token_picks(user_id);
-CREATE INDEX idx_token_picks_group_id ON social.token_picks(group_id);
-CREATE INDEX idx_token_picks_token_address ON social.token_picks(token_address);
-CREATE INDEX idx_token_picks_call_date ON social.token_picks(call_date);
-CREATE INDEX idx_token_picks_highest_multiplier ON social.token_picks(highest_multiplier);
-CREATE INDEX idx_token_picks_hit_date ON social.token_picks(hit_date);
+CREATE INDEX IF NOT EXISTS idx_token_picks_user_id ON social.token_picks(user_id);
+CREATE INDEX IF NOT EXISTS idx_token_picks_group_id ON social.token_picks(group_id);
+CREATE INDEX IF NOT EXISTS idx_token_picks_token_address ON social.token_picks(token_address);
+CREATE INDEX IF NOT EXISTS idx_token_picks_call_date ON social.token_picks(call_date);
+CREATE INDEX IF NOT EXISTS idx_token_picks_highest_multiplier ON social.token_picks(highest_multiplier);
+CREATE INDEX IF NOT EXISTS idx_token_picks_hit_date ON social.token_picks(hit_date);
 
-CREATE INDEX idx_user_follows_follower_id ON social.user_follows(follower_id);
-CREATE INDEX idx_user_follows_followed_id ON social.user_follows(followed_id);
+CREATE INDEX IF NOT EXISTS idx_token_volume_24h ON social.tokens(volume_24h);
+CREATE INDEX IF NOT EXISTS idx_token_liquidity ON social.tokens(liquidity);
 
-CREATE INDEX idx_user_tiers_user_id ON social.user_tiers(user_id);
-CREATE INDEX idx_user_tiers_tier ON social.user_tiers(tier);
+CREATE INDEX IF NOT EXISTS idx_user_follows_follower_id ON social.user_follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_user_follows_followed_id ON social.user_follows(followed_id);
 
-CREATE INDEX idx_point_transactions_user_id ON social.point_transactions(user_id);
-CREATE INDEX idx_point_transactions_action_type ON social.point_transactions(action_type);
-CREATE INDEX idx_point_transactions_created_at ON social.point_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_tiers_user_id ON social.user_tiers(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_tiers_tier ON social.user_tiers(tier);
 
-CREATE INDEX idx_comments_token_pick_id ON social.comments(token_pick_id);
-CREATE INDEX idx_comments_user_id ON social.comments(user_id);
-CREATE INDEX idx_comments_created_at ON social.comments(created_at);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON social.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_action_type ON social.point_transactions(action_type);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON social.point_transactions(created_at);
 
-CREATE INDEX idx_group_users_group_id ON social.group_users(group_id);
-CREATE INDEX idx_group_users_user_id ON social.group_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_comments_token_pick_id ON social.comments(token_pick_id);
+CREATE INDEX IF NOT EXISTS idx_comments_user_id ON social.comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_comments_created_at ON social.comments(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_group_users_group_id ON social.group_users(group_id);
+CREATE INDEX IF NOT EXISTS idx_group_users_user_id ON social.group_users(user_id);
 
 -- migrate:down
 
@@ -155,16 +159,26 @@ DROP INDEX IF EXISTS idx_token_picks_token_address;
 DROP INDEX IF EXISTS idx_token_picks_call_date;
 DROP INDEX IF EXISTS idx_token_picks_highest_multiplier;
 DROP INDEX IF EXISTS idx_token_picks_hit_date;
+
+DROP INDEX IF EXISTS idx_token_volume_24h;
+DROP INDEX IF EXISTS idx_token_liquidity;
+
 DROP INDEX IF EXISTS idx_user_follows_follower_id;
 DROP INDEX IF EXISTS idx_user_follows_followed_id;
+
 DROP INDEX IF EXISTS idx_user_tiers_user_id;
 DROP INDEX IF EXISTS idx_user_tiers_tier;
+
 DROP INDEX IF EXISTS idx_point_transactions_user_id;
 DROP INDEX IF EXISTS idx_point_transactions_action_type;
 DROP INDEX IF EXISTS idx_point_transactions_created_at;
+
 DROP INDEX IF EXISTS idx_comments_token_pick_id;
 DROP INDEX IF EXISTS idx_comments_user_id;
 DROP INDEX IF EXISTS idx_comments_created_at;
+
+DROP INDEX IF EXISTS idx_group_users_group_id;
+DROP INDEX IF EXISTS idx_group_users_user_id;
 
 DROP TABLE IF EXISTS social.comments;
 DROP TABLE IF EXISTS social.tokens;
