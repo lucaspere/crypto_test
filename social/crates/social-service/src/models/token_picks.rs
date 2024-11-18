@@ -1,4 +1,4 @@
-use crate::repositories::token_repository::TokenPickRow;
+use crate::{repositories::token_repository::TokenPickRow, utils::time::TimePeriod};
 
 use super::{
     tokens::Token,
@@ -11,7 +11,7 @@ use rust_decimal::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 pub const HIT_MULTIPLIER: u8 = 2;
 
@@ -182,4 +182,12 @@ impl From<TokenPickRow> for TokenPickResponse {
             ..Default::default()
         }
     }
+}
+
+#[derive(Deserialize, Default, IntoParams)]
+pub struct ProfilePicksAndStatsQuery {
+    pub username: String,
+    pub multiplier: Option<u8>,
+    pub picked_after: Option<TimePeriod>,
+    pub group_ids: Option<Vec<i64>>,
 }
