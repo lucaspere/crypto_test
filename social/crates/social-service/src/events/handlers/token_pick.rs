@@ -213,7 +213,7 @@ impl TokenPickHandler {
             r#"
 	Ticker: {}
 	Market Cap at Call: <code>{}</code>
-	Price at Call: <code>{}</code>"
+	Price at Call: <code>{}</code>
 	1h: <code>{}</code> 4h: <code>{}</code> 24h: <code>{}</code>
 
 	Volume (24h): <code>${}</code>
