@@ -189,7 +189,7 @@ pub(super) async fn get_group_members(
 
     let res = app_state
         .group_service
-        .list_group_members(group_id, limit, page, None)
+        .list_group_members(group_id, limit, page, query.order_by, query.username)
         .await?;
     let total = res.members.len();
     let total_pages = ((res.total as f64) / (limit as f64)).ceil() as u32;
@@ -298,9 +298,13 @@ pub(super) async fn leaderboard(
     let group_members_responses = user_groups
         .iter()
         .map(|group| {
-            app_state
-                .group_service
-                .list_group_members(group.id, 0, 0, params.sort)
+            app_state.group_service.list_group_members(
+                group.id,
+                0,
+                0,
+                params.sort,
+                params.username.clone(),
+            )
         })
         .collect::<Vec<_>>();
 

@@ -122,12 +122,19 @@ impl GroupService {
         limit: u32,
         page: u32,
         sort: Option<ProfileLeaderboardSort>,
+        username: Option<String>,
     ) -> Result<GroupMembersResponse, ApiError> {
         let (group_members, group_name, total) = self
             .repository
             .list_group_members(group_id, limit, page, sort.is_some())
             .await?;
 
+        let user = if let Some(username) = username {
+            self.user_service.get_by_username(&username).await?
+        } else {
+            None
+        };
+        let user_id = user.map(|u| u.id);
         if let Some(profile_service) = &self.profile_service.as_ref() {
             let profiles = join_all(group_members.iter().map(|g| {
                 profile_service.get_profile(
@@ -136,7 +143,7 @@ impl GroupService {
                         picked_after: TimePeriod::AllTime,
                         group_id: Some(group_id),
                     },
-                    None,
+                    user_id,
                 )
             }))
             .await
