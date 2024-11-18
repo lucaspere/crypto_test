@@ -173,13 +173,13 @@ impl TokenService {
         Ok(processed_pick)
     }
 
-    async fn process_single_pick(
+    pub async fn process_single_pick(
         &self,
         pick: &mut TokenPick,
     ) -> Result<TokenPickResponse, ApiError> {
         let latest_prices = self
             .rust_monorepo_service
-            .get_latest_w_metadata(vec![pick.token.address.clone()])
+            .get_latest_w_metadata(&[pick.token.address.clone()])
             .await
             .map_err(|e| {
                 error!(
@@ -274,6 +274,73 @@ impl TokenService {
         Ok(pick_response)
     }
 
+    pub async fn process_single_pick_with_metadata(
+        &self,
+        pick: &mut TokenPickRow,
+        metadata: &LatestTokenMetadataResponse,
+    ) -> Result<(TokenPickResponse, bool), ApiError> {
+        let current_market_cap = metadata.market_cap;
+        let mut has_update = false;
+        if pick.highest_market_cap.is_none() {
+            let ohlcv = self
+                .birdeye_service
+                .get_ohlcv_request(
+                    "solana",
+                    &metadata.address,
+                    pick.call_date.timestamp(),
+                    Utc::now().timestamp(),
+                    "1H",
+                )
+                .await
+                .map_err(|e| {
+                    error!("Failed to fetch OHLCV for token pick {}: {}", pick.id, e);
+                    ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
+                })?;
+
+            pick.highest_market_cap = Some(ohlcv.high);
+            has_update = true;
+        }
+
+        // Check if we need to update the highest market cap
+        if current_market_cap > pick.highest_market_cap.unwrap_or_default() {
+            debug!(
+                "Updating highest market cap for token pick {}. Old: {}, New: {}",
+                pick.id,
+                pick.highest_market_cap.unwrap_or_default(),
+                current_market_cap
+            );
+
+            pick.highest_market_cap = Some(current_market_cap);
+
+            has_update = true;
+        }
+        pick.highest_multiplier = Some(
+            calculate_return(
+                &pick.market_cap_at_call,
+                &pick.highest_market_cap.unwrap_or_default(),
+            )
+            .round_dp(2),
+        );
+        if pick.highest_multiplier.unwrap_or_default() > Decimal::from(2) {
+            pick.hit_date = Some(Utc::now().into());
+            has_update = true;
+        }
+
+        let mut pick_response = TokenPickResponse::from(pick.clone());
+        pick_response.volume_24h = metadata.metadata.v_24h_usd;
+        pick_response.liquidity = metadata.metadata.liquidity;
+        pick_response.logo_uri = metadata.metadata.logo_uri.clone();
+        pick_response.current_market_cap = current_market_cap.round_dp(2);
+        pick_response.current_multiplier =
+            calculate_return(&pick.market_cap_at_call, &current_market_cap)
+                .round_dp(2)
+                .to_string()
+                .parse::<f32>()
+                .unwrap_or_default();
+
+        Ok((pick_response, has_update))
+    }
+
     pub async fn save_token_pick(
         &self,
         pick: TokenPickRequest,
@@ -303,7 +370,7 @@ impl TokenService {
 
         let token_info = self
             .rust_monorepo_service
-            .get_latest_w_metadata(vec![pick.address.clone()])
+            .get_latest_w_metadata(&[pick.address.clone()])
             .await?;
 
         let token_info = token_info.get(&pick.address).ok_or_else(|| {
@@ -428,12 +495,20 @@ impl TokenService {
 
         Ok(count >= Self::MAX_PICK_LIMIT)
     }
-}
 
-fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
-    if market_cap_at_call.is_zero() || highest_market_cap.is_zero() {
-        Decimal::zero()
-    } else {
-        highest_market_cap / market_cap_at_call
+    pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPickRow>>, ApiError> {
+        info!("Getting all tokens with picks");
+        self.token_repository
+            .get_all_tokens_with_picks_group_by_group_id()
+            .await
+            .map_err(ApiError::from)
+    }
+
+    pub async fn bulk_update_token_picks(
+        &self,
+        picks: &[TokenPickResponse],
+    ) -> Result<(), ApiError> {
+        self.token_repository.bulk_update_token_picks(picks).await?;
+        Ok(())
     }
 }

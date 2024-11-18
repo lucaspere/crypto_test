@@ -43,7 +43,7 @@ impl TokenPickHandler {
         let token_price_metadata = self
             .services
             .rust_monorepo_service
-            .get_latest_w_metadata(vec![data.token_pick.token.address.clone()])
+            .get_latest_w_metadata(&[data.token_pick.token.address.clone()])
             .await?
             .into_iter()
             .next()
