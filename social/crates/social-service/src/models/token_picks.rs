@@ -1,4 +1,7 @@
-use crate::{repositories::token_repository::TokenPickRow, utils::time::TimePeriod};
+use crate::{
+    repositories::token_repository::TokenPickRow,
+    utils::{math::calculate_price_multiplier, time::TimePeriod},
+};
 
 use super::{
     tokens::Token,
@@ -6,7 +9,7 @@ use super::{
 };
 use chrono::{DateTime, FixedOffset, Utc};
 use rust_decimal::{
-    prelude::{FromPrimitive, Zero},
+    prelude::{FromPrimitive, ToPrimitive, Zero},
     Decimal,
 };
 use serde::{Deserialize, Serialize};
@@ -110,30 +113,26 @@ pub struct TokenPickResponse {
     pub highest_mult_post_call: f32,
     /// Date the pick hit
     pub hit_date: Option<DateTime<FixedOffset>>,
-    /// The logo URI
-    pub logo_uri: Option<String>,
-    /// Volume 24h
-    pub volume_24h: Option<Decimal>,
-    /// Liquidity
-    pub liquidity: Option<Decimal>,
 }
 
 impl From<TokenPick> for TokenPickResponse {
     fn from(pick: TokenPick) -> Self {
-        let highest_mult_post_call = if let Some(highest_market_cap) = pick.highest_market_cap {
-            if highest_market_cap.is_zero() || pick.market_cap_at_call.is_zero() {
-                Decimal::zero()
-            } else {
-                highest_market_cap / pick.market_cap_at_call
-            }
-        } else {
-            Decimal::zero()
-        }
+        let highest_mult_post_call = calculate_price_multiplier(
+            &pick.market_cap_at_call,
+            &pick.highest_market_cap.unwrap_or_default(),
+        )
         .round_dp(2);
         let highest_mult_post_call = highest_mult_post_call
             .to_string()
             .parse::<f32>()
             .unwrap_or_default();
+
+        let current_market_cap = pick.token.0.market_cap.unwrap_or_default();
+        let current_multiplier =
+            calculate_price_multiplier(&pick.market_cap_at_call, &current_market_cap)
+                .round_dp(2)
+                .to_f32()
+                .unwrap_or_default();
 
         Self {
             token: pick.token.0,
@@ -145,6 +144,8 @@ impl From<TokenPick> for TokenPickResponse {
             highest_mc_post_call: pick.highest_market_cap.map(|mc| mc.round_dp(2)),
             hit_date: pick.hit_date,
             market_cap_at_call: pick.market_cap_at_call.round_dp(2),
+            current_market_cap,
+            current_multiplier,
             ..Default::default()
         }
     }

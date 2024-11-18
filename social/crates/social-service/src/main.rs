@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use dotenv::dotenv;
-use social_service::{settings, start_event_listeners};
+use social_service::{jobs, settings, start_event_listeners};
 use tokio::net::TcpListener;
 use tracing::{debug, error};
 
@@ -20,6 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Server running on http://{:?}", listener.local_addr());
     let settings = Arc::new(settings);
 
+    jobs::start_background_jobs(container.clone()).await;
     tokio::spawn(async move {
         start_event_listeners(settings, container)
             .await

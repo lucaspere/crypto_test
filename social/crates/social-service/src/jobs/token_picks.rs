@@ -157,7 +157,6 @@ async fn process_token_picks(
 
     let results = futures::future::join_all(pick_futures).await;
 
-    // Update cache and leaderboards concurrently
     let cache_futures = results.iter().filter(|r| r.is_ok()).map(|r| {
         let pick = r.as_ref().unwrap().0.clone();
         update_pick_stats(app_state, pick)
@@ -165,7 +164,6 @@ async fn process_token_picks(
 
     futures::future::join_all(cache_futures).await;
 
-    // Bulk update database
     let updated_picks: Vec<_> = results
         .into_iter()
         .filter(|r| r.is_ok())

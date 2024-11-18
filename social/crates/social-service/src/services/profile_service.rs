@@ -257,7 +257,7 @@ impl ProfileService {
 
         for pick in &mut picks {
             // Check and update 2x hit status
-            let hit_2x = calculate_return(
+            let hit_2x = calculate_price_multiplier(
                 &pick.market_cap_at_call,
                 &pick.highest_mc_post_call.unwrap_or_default(),
             ) >= Decimal::from(2);
@@ -270,7 +270,7 @@ impl ProfileService {
             }
 
             // Update best pick and total returns
-            let current_return = calculate_return(
+            let current_return = calculate_price_multiplier(
                 &pick.market_cap_at_call,
                 &pick.highest_mc_post_call.unwrap_or_default(),
             ) - Decimal::one();
@@ -352,7 +352,10 @@ impl ProfileService {
     }
 }
 
-fn calculate_return(market_cap_at_call: &Decimal, highest_market_cap: &Decimal) -> Decimal {
+fn calculate_price_multiplier(
+    market_cap_at_call: &Decimal,
+    highest_market_cap: &Decimal,
+) -> Decimal {
     if market_cap_at_call.is_zero() || highest_market_cap.is_zero() {
         Decimal::zero()
     } else {

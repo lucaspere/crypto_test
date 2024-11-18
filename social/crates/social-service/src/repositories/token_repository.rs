@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, FixedOffset};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use sqlx::{types::Json, PgPool};
@@ -82,9 +83,11 @@ impl TokenRepository {
     }
 
     pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), sqlx::Error> {
-        // Filter out tokens with empty required fields
+        if tokens.is_empty() {
+            return Ok(());
+        }
         let tokens: Vec<_> = tokens
-            .into_iter()
+            .into_par_iter()
             .filter(|token| {
                 !token.address.trim().is_empty()
                     && !token.name.trim().is_empty()
@@ -92,12 +95,9 @@ impl TokenRepository {
             })
             .collect();
 
-        if tokens.is_empty() {
-            return Ok(());
-        }
-
-        const COLUMNS: &str = "(address, name, symbol, chain, volume_24h, liquidity, logo_uri)";
-        const PARAMS_PER_ROW: usize = 7;
+        const COLUMNS: &str =
+            "(address, name, symbol, chain, market_cap, volume_24h, liquidity, logo_uri)";
+        const PARAMS_PER_ROW: usize = 8;
 
         let value_indices: Vec<String> = tokens
             .iter()
@@ -105,14 +105,15 @@ impl TokenRepository {
             .map(|(i, _)| {
                 let start = i * PARAMS_PER_ROW + 1;
                 format!(
-                    "(${},${},${},${},${},${},${})",
+                    "(${},${},${},${},${},${},${},${})",
                     start,
                     start + 1,
                     start + 2,
                     start + 3,
                     start + 4,
                     start + 5,
-                    start + 6
+                    start + 6,
+                    start + 7
                 )
             })
             .collect();
@@ -131,6 +132,7 @@ impl TokenRepository {
                     WHEN EXCLUDED.symbol != '' THEN EXCLUDED.symbol
                     ELSE social.tokens.symbol
                 END,
+                market_cap = EXCLUDED.market_cap,
                 volume_24h = EXCLUDED.volume_24h,
                 liquidity = EXCLUDED.liquidity,
                 logo_uri = EXCLUDED.logo_uri
@@ -146,6 +148,7 @@ impl TokenRepository {
                 .bind(&token.name)
                 .bind(&token.symbol)
                 .bind(&token.chain)
+                .bind(token.market_cap)
                 .bind(token.volume_24h)
                 .bind(token.liquidity)
                 .bind(&token.logo_uri);
