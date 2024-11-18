@@ -212,7 +212,12 @@ impl TokenRepository {
         if let Some(params) = params {
             if let Some(order_by) = &params.order_by {
                 let direction = params.order_direction.as_deref().unwrap_or("ASC");
-                base_query += &format!(" ORDER BY {} {}", order_by.to_string(), direction);
+                base_query += &format!(
+                    " ORDER BY CASE WHEN {} = 0 THEN 1 ELSE 0 END, {} {}",
+                    order_by.to_string(),
+                    order_by.to_string(),
+                    direction
+                );
             } else {
                 base_query += " ORDER BY call_date DESC";
             }
@@ -292,7 +297,12 @@ impl TokenRepository {
         if let Some(params) = params {
             if let Some(order_by) = &params.order_by {
                 let direction = params.order_direction.as_deref().unwrap_or("ASC");
-                base_query += &format!(" ORDER BY {} {}", order_by.to_string(), direction);
+                base_query += &format!(
+                    " ORDER BY CASE WHEN {} = 0 THEN 1 ELSE 0 END, {} {}",
+                    order_by.to_string(),
+                    order_by.to_string(),
+                    direction
+                );
             } else {
                 base_query += " ORDER BY call_date DESC";
             }
