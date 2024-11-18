@@ -9,7 +9,7 @@ use unzip3::Unzip3;
 use uuid::Uuid;
 
 use crate::{
-    apis::api_models::sorts::PickSort,
+    apis::api_models::query::PickLeaderboardSort,
     models::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Chain, Token},
@@ -37,7 +37,7 @@ pub struct ListTokenPicksParams {
     pub picked_after: Option<DateTime<FixedOffset>>,
     pub page: u32,
     pub limit: u32,
-    pub order_by: Option<PickSort>,
+    pub order_by: Option<PickLeaderboardSort>,
     pub order_direction: Option<String>,
     pub get_all: bool,
     pub group_ids: Option<Vec<i64>>,
@@ -64,9 +64,9 @@ impl TokenRepository {
 
     pub async fn save_token(&self, token: Token) -> Result<Token, sqlx::Error> {
         let query = r#"
-            INSERT INTO social.tokens (address, name, symbol, chain)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (address, chain) DO UPDATE SET name = $2, symbol = $3
+            INSERT INTO social.tokens (address, name, symbol, chain, volume_24h, liquidity, logo_uri)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (address, chain) DO UPDATE SET name = $2, symbol = $3, volume_24h = $5, liquidity = $6, logo_uri = $7
 			RETURNING *
         "#;
 
@@ -79,6 +79,80 @@ impl TokenRepository {
             .await?;
 
         Ok(token)
+    }
+
+    pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), sqlx::Error> {
+        // Filter out tokens with empty required fields
+        let tokens: Vec<_> = tokens
+            .into_iter()
+            .filter(|token| {
+                !token.address.trim().is_empty()
+                    && !token.name.trim().is_empty()
+                    && !token.symbol.trim().is_empty()
+            })
+            .collect();
+
+        if tokens.is_empty() {
+            return Ok(());
+        }
+
+        const COLUMNS: &str = "(address, name, symbol, chain, volume_24h, liquidity, logo_uri)";
+        const PARAMS_PER_ROW: usize = 7;
+
+        let value_indices: Vec<String> = tokens
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let start = i * PARAMS_PER_ROW + 1;
+                format!(
+                    "(${},${},${},${},${},${},${})",
+                    start,
+                    start + 1,
+                    start + 2,
+                    start + 3,
+                    start + 4,
+                    start + 5,
+                    start + 6
+                )
+            })
+            .collect();
+
+        let query = format!(
+            r#"
+            INSERT INTO social.tokens {COLUMNS}
+            VALUES {values}
+            ON CONFLICT (address, chain)
+            DO UPDATE SET
+                name = CASE
+                    WHEN EXCLUDED.name != '' THEN EXCLUDED.name
+                    ELSE social.tokens.name
+                END,
+                symbol = CASE
+                    WHEN EXCLUDED.symbol != '' THEN EXCLUDED.symbol
+                    ELSE social.tokens.symbol
+                END,
+                volume_24h = EXCLUDED.volume_24h,
+                liquidity = EXCLUDED.liquidity,
+                logo_uri = EXCLUDED.logo_uri
+            "#,
+            values = value_indices.join(",")
+        );
+
+        let mut query_builder = sqlx::query(&query);
+
+        for token in &tokens {
+            query_builder = query_builder
+                .bind(&token.address)
+                .bind(&token.name)
+                .bind(&token.symbol)
+                .bind(&token.chain)
+                .bind(token.volume_24h)
+                .bind(token.liquidity)
+                .bind(&token.logo_uri);
+        }
+
+        query_builder.execute(self.db.as_ref()).await?;
+        Ok(())
     }
 
     pub async fn list_token_picks(

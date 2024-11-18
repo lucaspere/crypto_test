@@ -12,14 +12,14 @@ use tracing::{debug, info, instrument, Span};
 use crate::{
     container::ServiceContainer,
     external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
-    models::token_picks::TokenPickResponse,
+    models::{token_picks::TokenPickResponse, tokens::Token},
     repositories::token_repository::TokenPickRow,
     utils::{api_errors::ApiError, redis_keys::RedisKeys},
 };
 
 const PROCESSING_LOCK_KEY: &str = "token_picks:processing_lock";
 const PROCESSING_LOCK_TTL: u64 = 300; // 5 minutes
-const BATCH_SIZE: i64 = 100;
+const BATCH_SIZE: i64 = 30;
 const DB_SLOW_THRESHOLD_SECS: f64 = 2.0;
 
 #[instrument(skip(app_state), fields(job_id = %uuid::Uuid::new_v4()))]
@@ -33,7 +33,10 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
     info!(token_count = addresses.len(), "Retrieved tokens to process");
 
     let semaphore = Arc::new(Semaphore::new(4));
-    let chunks: Vec<_> = addresses.par_chunks(100).map(|c| c.to_vec()).collect();
+    let chunks: Vec<_> = addresses
+        .par_chunks(BATCH_SIZE as usize)
+        .map(|c| c.to_vec())
+        .collect();
 
     debug!(chunk_count = chunks.len(), "Created processing chunks");
 
@@ -103,6 +106,17 @@ async fn process_address_batch(
         debug!(duration = duration, "Retrieved latest token metadata");
         result
     };
+
+    let tokens_to_save = address_batch
+        .iter()
+        .map(|address| latest_token_info.get(address).unwrap())
+        .map(|metadata| Token::from(metadata.clone()))
+        .collect::<Vec<_>>();
+
+    app_state
+        .token_service
+        .save_many_tokens(tokens_to_save)
+        .await?;
 
     let processing_futures = latest_token_info.into_iter().map(|(address, metadata)| {
         let token = tokens.get(&address).unwrap();

@@ -9,15 +9,20 @@ use uuid::Uuid;
 
 use crate::{
     apis::{api_models::query::TokenQuery, token_handlers::TokenGroupQuery},
-    external_services::{birdeye::BirdeyeService, rust_monorepo::RustMonorepoService},
+    external_services::{
+        birdeye::BirdeyeService,
+        rust_monorepo::{get_latest_w_metadata::LatestTokenMetadataResponse, RustMonorepoService},
+    },
     models::{
         groups::CreateOrUpdateGroup,
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Token, TokenPickRequest},
     },
-    repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
+    repositories::token_repository::{
+        ListTokenPicksParams, TokenPickRow, TokenRepository, UserPickLimitScope,
+    },
     services::user_service::UserService,
-    utils::{api_errors::ApiError, time::TimePeriod},
+    utils::{api_errors::ApiError, math::calculate_return, time::TimePeriod},
 };
 
 use super::{group_service::GroupService, redis_service::RedisService};
@@ -509,6 +514,11 @@ impl TokenService {
         picks: &[TokenPickResponse],
     ) -> Result<(), ApiError> {
         self.token_repository.bulk_update_token_picks(picks).await?;
+        Ok(())
+    }
+
+    pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), ApiError> {
+        self.token_repository.save_many_tokens(tokens).await?;
         Ok(())
     }
 }
