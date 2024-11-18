@@ -87,6 +87,7 @@ pub struct ProfileLeaderboardQuery {
 pub struct ListGroupMembersQuery {
     pub sort: Option<ProfileLeaderboardSort>,
     pub user_id: Uuid,
+    pub username: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema, Default)]
