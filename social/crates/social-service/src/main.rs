@@ -20,12 +20,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Server running on http://{:?}", listener.local_addr());
     let settings = Arc::new(settings);
 
-    jobs::start_background_jobs(container.clone()).await;
-    tokio::spawn(async move {
-        start_event_listeners(settings, container)
-            .await
-            .map_err(|e| error!("Failed to start event listeners: {}", e))
-    });
+    if settings.environment != Some("DEV".to_string()) {
+        jobs::start_background_jobs(container.clone()).await;
+        tokio::spawn(async move {
+            start_event_listeners(settings, container)
+                .await
+                .map_err(|e| error!("Failed to start event listeners: {}", e))
+        });
+    }
 
     if let Err(e) = axum::serve(listener, app).await {
         error!("Server error: {}", e);

@@ -22,6 +22,7 @@ pub const HIT_MULTIPLIER: u8 = 2;
 pub struct TokenPick {
     pub id: i64,
     pub token: Json<Token>,
+    #[sqlx(json)]
     pub user: Json<User>,
     pub group_id: i64,
     pub telegram_message_id: Option<i64>,

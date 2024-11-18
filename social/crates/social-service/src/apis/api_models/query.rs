@@ -92,7 +92,7 @@ pub struct ListGroupMembersQuery {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PickLeaderboardSort {
-    Hosttest,
+    Hottest,
     Newest,
     #[default]
     Reached,
@@ -101,7 +101,7 @@ pub enum PickLeaderboardSort {
 impl ToString for PickLeaderboardSort {
     fn to_string(&self) -> String {
         match self {
-            PickLeaderboardSort::Hosttest => "hosttest".to_string(),
+            PickLeaderboardSort::Hottest => "t.volume_24h".to_string(),
             PickLeaderboardSort::Newest => "call_date".to_string(),
             PickLeaderboardSort::Reached => "highest_multiplier".to_string(),
         }
