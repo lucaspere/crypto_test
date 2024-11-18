@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -37,15 +38,29 @@ pub struct Token {
     pub name: String,
     pub symbol: String,
     pub chain: String,
+    pub volume_24h: Option<Decimal>,
+    pub liquidity: Option<Decimal>,
+    pub logo_uri: Option<String>,
 }
 
 impl Token {
-    pub fn new(address: String, name: String, symbol: String, chain: String) -> Self {
+    pub fn new(
+        address: String,
+        name: String,
+        symbol: String,
+        chain: String,
+        volume_24h: Option<Decimal>,
+        liquidity: Option<Decimal>,
+        logo_uri: Option<String>,
+    ) -> Self {
         Self {
             address,
             name,
             symbol,
             chain,
+            volume_24h,
+            liquidity,
+            logo_uri,
         }
     }
 }
@@ -57,6 +72,9 @@ impl From<LatestTokenMetadataResponse> for Token {
             token_info.metadata.name,
             token_info.metadata.symbol,
             Chain::Solana.to_string(),
+            token_info.metadata.v_24h_usd,
+            token_info.metadata.liquidity,
+            token_info.metadata.logo_uri,
         )
     }
 }

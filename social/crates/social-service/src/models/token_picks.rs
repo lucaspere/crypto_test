@@ -1,4 +1,4 @@
-use crate::{repositories::token_repository::TokenPickRow, utils::time::TimePeriod};
+use crate::repositories::token_repository::TokenPickRow;
 
 use super::{
     tokens::Token,
@@ -11,7 +11,7 @@ use rust_decimal::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
-use utoipa::{IntoParams, ToSchema};
+use utoipa::ToSchema;
 
 pub const HIT_MULTIPLIER: u8 = 2;
 

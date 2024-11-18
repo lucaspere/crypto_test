@@ -1,15 +1,17 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, FixedOffset};
 use rust_decimal::Decimal;
-use sqlx::PgPool;
+use serde::Deserialize;
+use sqlx::{types::Json, PgPool};
 use tracing::{error, info};
+use unzip3::Unzip3;
 use uuid::Uuid;
 
 use crate::{
-    apis::api_models::query::PickLeaderboardSort,
+    apis::api_models::sorts::PickSort,
     models::{
-        token_picks::TokenPick,
+        token_picks::{TokenPick, TokenPickResponse},
         tokens::{Chain, Token},
     },
     utils::{api_errors::ApiError, time::TimePeriod},
@@ -35,7 +37,7 @@ pub struct ListTokenPicksParams {
     pub picked_after: Option<DateTime<FixedOffset>>,
     pub page: u32,
     pub limit: u32,
-    pub order_by: Option<PickLeaderboardSort>,
+    pub order_by: Option<PickSort>,
     pub order_direction: Option<String>,
     pub get_all: bool,
     pub group_ids: Option<Vec<i64>>,
@@ -389,6 +391,108 @@ impl TokenRepository {
         let count = query.fetch_one(self.db.as_ref()).await?;
         Ok(count)
     }
+
+    pub async fn get_unprocessed_token_picks(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<TokenPick>, sqlx::Error> {
+        let query = r#"
+            SELECT tp.*,
+                   row_to_json(t) AS token,
+                   row_to_json(u) AS user
+            FROM social.token_picks tp
+            JOIN social.tokens t ON tp.token_address = t.address
+            JOIN public.user u ON tp.user_id = u.id
+            WHERE tp.highest_market_cap IS NULL
+               OR tp.hit_date IS NULL
+            ORDER BY tp.call_date DESC
+            LIMIT $1
+        "#;
+
+        sqlx::query_as::<_, TokenPick>(query)
+            .bind(limit)
+            .fetch_all(self.db.as_ref())
+            .await
+    }
+
+    pub async fn get_all_tokens_with_picks_group_by_group_id(
+        &self,
+    ) -> Result<HashMap<String, Vec<TokenPickRow>>, sqlx::Error> {
+        let query = r#"
+            SELECT t.address, json_agg(tp.*) as picks
+            FROM social.tokens t
+            JOIN social.token_picks tp ON t.address = tp.token_address
+            GROUP BY t.address
+        "#;
+
+        let tokens = sqlx::query_as::<_, TokenWithPicks>(query)
+            .fetch_all(self.db.as_ref())
+            .await?;
+        let mut result: HashMap<String, Vec<TokenPickRow>> = HashMap::new();
+        for token in tokens {
+            result.entry(token.address).or_insert_with(|| token.picks.0);
+        }
+
+        Ok(result)
+    }
+
+    pub async fn bulk_update_token_picks(
+        &self,
+        picks: &[TokenPickResponse],
+    ) -> Result<(), sqlx::Error> {
+        if picks.is_empty() {
+            return Ok(());
+        }
+
+        let query = r#"
+            UPDATE social.token_picks
+            SET highest_market_cap = v.highest_mc,
+                hit_date = v.hit_date
+            FROM (
+                SELECT
+                    UNNEST($1::bigint[]) as id,
+                    UNNEST($2::numeric[]) as highest_mc,
+                    UNNEST($3::timestamptz[]) as hit_date
+            ) as v
+            WHERE token_picks.id = v.id
+        "#;
+
+        let (ids, highest_mcs, hit_dates): (Vec<_>, Vec<_>, Vec<_>) = picks
+            .iter()
+            .filter(|p| p.highest_mc_post_call.is_some())
+            .map(|p| (p.id, p.highest_mc_post_call.unwrap(), p.hit_date))
+            .unzip3();
+
+        sqlx::query(query)
+            .bind(&ids)
+            .bind(&highest_mcs)
+            .bind(&hit_dates)
+            .execute(self.db.as_ref())
+            .await?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct TokenWithPicks {
+    address: String,
+    picks: Json<Vec<TokenPickRow>>,
+}
+
+#[derive(Debug, sqlx::FromRow, Deserialize, Clone)]
+pub struct TokenPickRow {
+    pub id: i64,
+    pub group_id: i64,
+    pub token_address: String,
+    pub telegram_message_id: Option<i64>,
+    pub price_at_call: Decimal,
+    pub market_cap_at_call: Decimal,
+    pub supply_at_call: Option<Decimal>,
+    pub call_date: DateTime<FixedOffset>,
+    pub highest_market_cap: Option<Decimal>,
+    pub highest_multiplier: Option<Decimal>,
+    pub hit_date: Option<DateTime<FixedOffset>>,
 }
 
 #[derive(Debug, sqlx::FromRow)]

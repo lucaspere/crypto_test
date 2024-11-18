@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use get_latest_w_metadata::LatestTokenMetadataResponse;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use reqwest::Client;
 use tracing::{error, info};
 
@@ -24,11 +25,11 @@ impl RustMonorepoService {
 
     pub async fn get_latest_w_metadata(
         &self,
-        addresses: Vec<String>,
+        addresses: &[String],
     ) -> Result<HashMap<String, LatestTokenMetadataResponse>, ApiError> {
         let body = serde_json::to_string(&addresses)
             .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
-        info!("Sending data to rust monorepo: {:?}", body);
+        info!("Sending data to rust monorepo: {}", body.len());
         let url = format!("{}/price/latest-with-metadata", self.rust_monorepo_url);
         let res = self
             .client
@@ -46,7 +47,10 @@ impl RustMonorepoService {
             }
         };
 
-        let result = tokens.into_iter().map(|r| (r.address.clone(), r)).collect();
+        let result = tokens
+            .into_par_iter()
+            .map(|r| (r.address.clone(), r))
+            .collect();
 
         Ok(result)
     }
