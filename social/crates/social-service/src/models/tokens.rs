@@ -80,13 +80,13 @@ impl From<LatestTokenMetadataResponse> for Token {
     fn from(token_info: LatestTokenMetadataResponse) -> Self {
         Self::new(
             token_info.address,
-            token_info.metadata.name,
-            token_info.metadata.symbol,
+            token_info.token_info.name,
+            token_info.token_info.symbol,
             Chain::Solana.to_string(),
             Some(token_info.market_cap),
             token_info.metadata.v_24h_usd,
             token_info.metadata.liquidity,
-            token_info.metadata.logo_uri,
+            token_info.token_info.image_url,
         )
     }
 }

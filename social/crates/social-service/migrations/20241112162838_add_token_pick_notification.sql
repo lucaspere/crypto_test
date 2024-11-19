@@ -12,7 +12,11 @@ BEGIN
         'address', t.address,
         'name', t.name,
         'symbol', t.symbol,
-        'chain', t.chain
+        'chain', t.chain,
+		'market_cap', t.market_cap,
+		'volume_24h', t.volume_24h,
+		'liquidity', t.liquidity,
+		'logo_uri', t.logo_uri
     )
     FROM social.tokens t
     WHERE t.address = NEW.token_address

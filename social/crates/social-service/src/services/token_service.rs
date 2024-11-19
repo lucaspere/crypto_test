@@ -404,7 +404,7 @@ impl TokenService {
             })?),
             price_at_call: token_info.price,
             highest_market_cap: Some(market_cap_at_call),
-            supply_at_call: token_info.metadata.supply,
+            supply_at_call: Some(token_info.token_info.supply),
             market_cap_at_call,
             ..Default::default()
         };

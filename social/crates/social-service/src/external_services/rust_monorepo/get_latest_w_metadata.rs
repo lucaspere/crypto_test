@@ -10,6 +10,7 @@ pub struct LatestTokenMetadataResponse {
     pub market_cap: Decimal,
     pub metadata_fetched_at_unix_time: i64,
     pub metadata: BirdEyeMetadataDataProperty,
+    pub token_info: TokenInfoProperty,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -69,4 +70,13 @@ struct BirdEyeMetadataExtensionsProperty {
     medium: Option<String>,
     website: Option<String>,
     description: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenInfoProperty {
+    pub supply: Decimal,
+    pub name: String,
+    pub symbol: String,
+    pub image_url: Option<String>,
 }
