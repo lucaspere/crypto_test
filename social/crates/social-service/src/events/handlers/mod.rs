@@ -54,8 +54,10 @@ pub fn format_number_with_dynamic_precision(
 ) -> String {
     let mut precision = min_precision;
     while precision <= max_precision {
-        let formatted = format!("{:.1$}", num, precision as usize);
-        if formatted.parse::<f64>().unwrap_or(0.0) != 0.0 {
+        let formatted = format!("{:.1$}~", num, precision as usize);
+        if formatted.parse::<f64>().unwrap_or(0.0) != 0.0
+            && formatted.parse::<f64>().unwrap() != num
+        {
             return formatted;
         }
         precision += 1;
