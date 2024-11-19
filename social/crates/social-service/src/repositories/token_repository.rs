@@ -169,7 +169,8 @@ impl TokenRepository {
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
-            WHERE 1=1
+            WHERE COALESCE(t.liquidity, 0) > 0 AND COALESCE(t.volume_24h, 0) > 0
+            AND 1=1
         "#
         .to_string();
 
@@ -340,7 +341,8 @@ impl TokenRepository {
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
-            WHERE tp.id = $1
+            WHERE COALESCE(t.liquidity, 0) > 0 AND COALESCE(t.volume_24h, 0) > 0
+            AND 1=1
         "#;
 
         sqlx::query_as::<_, TokenPick>(query)

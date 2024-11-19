@@ -64,7 +64,15 @@ impl GroupRepository {
                             THEN (highest_market_cap::float / market_cap_at_call::float)
                             ELSE 0
                         END
-                    ) as total_returns
+                    ) as total_returns,
+                    AVG(
+                        CASE
+                            WHEN highest_market_cap IS NOT NULL
+                                AND market_cap_at_call > 0
+                        THEN (highest_market_cap::float / market_cap_at_call::float)
+                            ELSE 0
+                        END
+                    ) as average_returns
                 FROM social.token_picks
                 GROUP BY group_id
             ),
@@ -83,6 +91,7 @@ impl GroupRepository {
                 g.created_at,
                 COALESCE(tp.total_picks, 0) as token_pick_count,
                 COALESCE(gu.user_count, 0) as user_count,
+                COALESCE(tp.average_returns, 0) as average_returns,
                 COALESCE(
                     CASE
                         WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float
@@ -162,7 +171,8 @@ impl GroupRepository {
     }
 
     pub async fn list_groups(&self, params: &ListGroupsQuery) -> Result<Vec<Group>, sqlx::Error> {
-        let mut query = r#"WITH token_pick_stats AS (
+        let mut query = r#"
+            WITH token_pick_stats AS (
                 SELECT
                     group_id,
                     COUNT(*) as total_picks,
@@ -174,7 +184,15 @@ impl GroupRepository {
                             THEN (highest_market_cap::float / market_cap_at_call::float)
                             ELSE 0
                         END
-                    ) as total_returns
+                    ) as total_returns,
+                    AVG(
+                        CASE
+                            WHEN highest_market_cap IS NOT NULL
+                                AND market_cap_at_call > 0
+                        THEN (highest_market_cap::float / market_cap_at_call::float)
+                            ELSE 0
+                        END
+                    ) as average_returns
                 FROM social.token_picks
                 GROUP BY group_id
             ),
@@ -193,6 +211,7 @@ impl GroupRepository {
                 g.created_at,
                 COALESCE(tp.total_picks, 0) as token_pick_count,
                 COALESCE(gu.user_count, 0) as user_count,
+                COALESCE(tp.average_returns, 0) as average_returns,
                 COALESCE(
                     CASE
                         WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float

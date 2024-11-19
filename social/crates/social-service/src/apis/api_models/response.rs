@@ -50,6 +50,7 @@ pub struct GroupResponse {
     total_token_pick: i64,
     total_users: i64,
     total_pick_returns: f64,
+    average_returns: f64,
     hit_rate: f64,
     realized_profit: u64,
 }
@@ -64,6 +65,7 @@ impl From<Group> for GroupResponse {
             total_token_pick: group.token_pick_count,
             total_users: group.user_count,
             total_pick_returns: (group.total_returns * 100.0).round() / 100.0,
+            average_returns: (group.average_returns * 100.0).round() / 100.0,
             hit_rate: (group.hit_rate * 100.0).round() / 100.0,
             realized_profit: 0,
         }
