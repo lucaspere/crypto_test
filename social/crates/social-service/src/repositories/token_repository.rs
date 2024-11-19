@@ -88,6 +88,9 @@ impl TokenRepository {
             .bind(token.name)
             .bind(token.symbol)
             .bind(token.chain)
+            .bind(token.volume_24h)
+            .bind(token.liquidity)
+            .bind(token.logo_uri)
             .fetch_one(self.db.as_ref())
             .await?;
 
