@@ -34,4 +34,6 @@ pub struct BestPick {
     pub token_address: String,
     /// The multiplier of the pick.
     pub multiplier: Decimal,
+    /// Logo URI.
+    pub logo_uri: Option<String>,
 }

@@ -3,10 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use chrono::Utc;
 use futures::future::join_all;
 use rayon::slice::ParallelSliceMut;
-use rust_decimal::{
-    prelude::{One, Zero},
-    Decimal,
-};
+use rust_decimal::{prelude::Zero, Decimal};
 use tracing::info;
 use uuid::Uuid;
 
@@ -255,6 +252,7 @@ impl ProfileService {
                 token_symbol: pick.token.symbol.clone(),
                 token_address: pick.token.address.clone(),
                 multiplier: current_return,
+                logo_uri: pick.token.logo_uri.clone(),
             };
 
             best_pick = match best_pick {
