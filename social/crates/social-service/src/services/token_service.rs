@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rust_decimal::Decimal;
 use sqlx::types::Json;
 use tracing::{debug, error, info};
@@ -133,10 +134,21 @@ impl TokenService {
 
         let pick_responses = join_all(pick_futures)
             .await
-            .into_iter()
+            .into_par_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
-        let response = (pick_responses.clone(), total);
+        let pick_response: Vec<TokenPickResponse> = pick_responses
+            .into_iter()
+            .filter(|pick| {
+                TokenPick::is_qualified(
+                    pick.current_market_cap,
+                    pick.token.liquidity,
+                    pick.token.volume_24h,
+                )
+            })
+            .collect();
+
+        let response = (pick_response, total);
         if let Err(e) = self
             .redis_service
             .set_cached(&cache_key, &response, 300)
@@ -278,60 +290,72 @@ impl TokenService {
 
     pub async fn process_single_pick_with_metadata(
         &self,
-        pick: &mut TokenPickRow,
+        pick_row: &mut TokenPickRow,
         metadata: &LatestTokenMetadataResponse,
     ) -> Result<(TokenPickResponse, bool), ApiError> {
         let current_market_cap = metadata.market_cap;
         let mut has_update = false;
-        if pick.highest_market_cap.is_none() {
+
+        if !TokenPick::is_qualified(
+            metadata.market_cap,
+            metadata.metadata.liquidity,
+            metadata.metadata.v_24h_usd,
+        ) {
+            return Ok((TokenPickResponse::from(pick_row.clone()), false));
+        }
+
+        if pick_row.highest_market_cap.is_none() {
             let ohlcv = self
                 .birdeye_service
                 .get_ohlcv_request(
                     "solana",
                     &metadata.address,
-                    pick.call_date.timestamp(),
+                    pick_row.call_date.timestamp(),
                     Utc::now().timestamp(),
                     "1H",
                 )
                 .await
                 .map_err(|e| {
-                    error!("Failed to fetch OHLCV for token pick {}: {}", pick.id, e);
+                    error!(
+                        "Failed to fetch OHLCV for token pick {}: {}",
+                        pick_row.id, e
+                    );
                     ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
                 })?;
 
-            pick.highest_market_cap = Some(ohlcv.high);
+            pick_row.highest_market_cap = Some(ohlcv.high);
             has_update = true;
         }
 
         // Check if we need to update the highest market cap
-        if current_market_cap > pick.highest_market_cap.unwrap_or_default() {
+        if current_market_cap > pick_row.highest_market_cap.unwrap_or_default() {
             debug!(
                 "Updating highest market cap for token pick {}. Old: {}, New: {}",
-                pick.id,
-                pick.highest_market_cap.unwrap_or_default(),
+                pick_row.id,
+                pick_row.highest_market_cap.unwrap_or_default(),
                 current_market_cap
             );
 
-            pick.highest_market_cap = Some(current_market_cap);
+            pick_row.highest_market_cap = Some(current_market_cap);
 
             has_update = true;
         }
-        pick.highest_multiplier = Some(
+        pick_row.highest_multiplier = Some(
             calculate_price_multiplier(
-                &pick.market_cap_at_call,
-                &pick.highest_market_cap.unwrap_or_default(),
+                &pick_row.market_cap_at_call,
+                &pick_row.highest_market_cap.unwrap_or_default(),
             )
             .round_dp(2),
         );
-        if pick.highest_multiplier.unwrap_or_default() > Decimal::from(2) {
-            pick.hit_date = Some(Utc::now().into());
+        if pick_row.highest_multiplier.unwrap_or_default() > Decimal::from(2) {
+            pick_row.hit_date = Some(Utc::now().into());
             has_update = true;
         }
 
-        let mut pick_response = TokenPickResponse::from(pick.clone());
+        let mut pick_response = TokenPickResponse::from(pick_row.clone());
         pick_response.current_market_cap = current_market_cap.round_dp(2);
         pick_response.current_multiplier =
-            calculate_price_multiplier(&pick.market_cap_at_call, &current_market_cap)
+            calculate_price_multiplier(&pick_row.market_cap_at_call, &current_market_cap)
                 .round_dp(2)
                 .to_string()
                 .parse::<f32>()
