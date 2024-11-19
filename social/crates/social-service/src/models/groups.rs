@@ -13,6 +13,7 @@ pub struct Group {
     pub is_admin: Option<bool>,
     pub token_pick_count: i64,
     pub total_returns: f64,
+    pub average_returns: f64,
     pub user_count: i64,
     pub hit_rate: f64,
 }
