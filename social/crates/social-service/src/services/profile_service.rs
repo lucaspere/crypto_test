@@ -273,7 +273,7 @@ impl ProfileService {
             let current_return = calculate_price_multiplier(
                 &pick.market_cap_at_call,
                 &pick.highest_mc_post_call.unwrap_or_default(),
-            ) - Decimal::one();
+            );
             total_returns += current_return;
 
             let new_best = BestPick {

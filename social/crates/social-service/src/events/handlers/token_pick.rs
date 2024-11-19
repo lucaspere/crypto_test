@@ -287,7 +287,7 @@ fn format_header_line(text: &str, is_new_tip: bool) -> String {
 impl From<LatestTokenMetadataResponse> for TokenPriceMetadata {
     fn from(value: LatestTokenMetadataResponse) -> Self {
         let metadata = TokenMetadata {
-            mc: Some((value.price * value.metadata.supply.unwrap_or_default()).to_string()),
+            mc: Some(value.market_cap.to_string()),
             v24h_usd: value.metadata.v_24h_usd.map(|v| v.to_string()),
             price_change_1h_percent: value
                 .metadata
@@ -306,7 +306,7 @@ impl From<LatestTokenMetadataResponse> for TokenPriceMetadata {
         };
         Self {
             price: Some(value.price.to_string()),
-            symbol: value.metadata.symbol,
+            symbol: value.token_info.symbol,
             address: value.address,
             metadata,
         }
