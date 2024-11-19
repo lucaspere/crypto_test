@@ -137,18 +137,7 @@ impl TokenService {
             .into_par_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
-        let pick_response: Vec<TokenPickResponse> = pick_responses
-            .into_iter()
-            .filter(|pick| {
-                TokenPick::is_qualified(
-                    pick.current_market_cap,
-                    pick.token.liquidity,
-                    pick.token.volume_24h,
-                )
-            })
-            .collect();
-
-        let response = (pick_response, total);
+        let response = (pick_responses, total);
         if let Err(e) = self
             .redis_service
             .set_cached(&cache_key, &response, 300)
