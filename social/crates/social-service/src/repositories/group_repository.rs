@@ -5,7 +5,57 @@ use uuid::Uuid;
 use crate::{
     apis::group_handlers::ListGroupsQuery,
     models::groups::{CreateOrUpdateGroup, Group, GroupUser, GroupWithUsers},
+    repositories::token_repository::QUALIFIED_TOKEN_PICKS_FILTER,
 };
+
+const GROUP_STATS_CTE: &str = r#"
+    WITH token_pick_stats AS (
+        SELECT
+            group_id,
+            COUNT(*) as total_picks,
+            COUNT(CASE WHEN hit_date IS NOT NULL THEN 1 END) as hits,
+            SUM(
+                CASE
+                    WHEN highest_market_cap IS NOT NULL
+                        AND market_cap_at_call > 0
+                    THEN (highest_market_cap::float / market_cap_at_call::float)
+                    ELSE 0
+                END
+            ) as total_returns,
+            AVG(
+                CASE
+                    WHEN highest_market_cap IS NOT NULL
+                        AND market_cap_at_call > 0
+                    THEN (highest_market_cap::float / market_cap_at_call::float)
+                    ELSE 0
+                END
+            ) as average_returns
+        FROM social.token_picks tp
+        JOIN social.tokens t ON tp.token_address = t.address
+        WHERE 1=1"#;
+
+const GROUP_SELECT_QUERY: &str = r#"
+    SELECT
+        g.id,
+        g.name,
+        g.logo_uri,
+        g.is_admin,
+        g.created_at,
+        COALESCE(tp.total_picks, 0) as token_pick_count,
+        COALESCE(gu.user_count, 0) as user_count,
+        COALESCE(
+            CASE
+                WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float
+                ELSE 0
+            END,
+            0
+        ) as hit_rate,
+        COALESCE(tp.total_returns, 0) as total_returns,
+        COALESCE(tp.average_returns, 0) as average_returns
+    FROM social.groups g
+    LEFT JOIN token_pick_stats tp ON g.id = tp.group_id
+    LEFT JOIN group_user_counts gu ON g.id = gu.group_id
+"#;
 
 pub struct GroupRepository {
     db: Arc<PgPool>,
@@ -50,31 +100,11 @@ impl GroupRepository {
     }
 
     pub async fn get_group(&self, id: i64) -> Result<Option<Group>, sqlx::Error> {
-        sqlx::query_as::<_, Group>(
+        let query = format!(
             r#"
-            WITH token_pick_stats AS (
-                SELECT
-                    group_id,
-                    COUNT(*) as total_picks,
-                    COUNT(CASE WHEN hit_date IS NOT NULL THEN 1 END) as hits,
-                    SUM(
-                        CASE
-                            WHEN highest_market_cap IS NOT NULL
-                                AND market_cap_at_call > 0
-                            THEN (highest_market_cap::float / market_cap_at_call::float)
-                            ELSE 0
-                        END
-                    ) as total_returns,
-                    AVG(
-                        CASE
-                            WHEN highest_market_cap IS NOT NULL
-                                AND market_cap_at_call > 0
-                        THEN (highest_market_cap::float / market_cap_at_call::float)
-                            ELSE 0
-                        END
-                    ) as average_returns
-                FROM social.token_picks
-                GROUP BY group_id
+            {GROUP_STATS_CTE}
+            {QUALIFIED_TOKEN_PICKS_FILTER}
+            GROUP BY group_id
             ),
             group_user_counts AS (
                 SELECT
@@ -83,32 +113,15 @@ impl GroupRepository {
                 FROM social.group_users
                 GROUP BY group_id
             )
-            SELECT
-                g.id,
-                g.name,
-                g.logo_uri,
-                g.is_admin,
-                g.created_at,
-                COALESCE(tp.total_picks, 0) as token_pick_count,
-                COALESCE(gu.user_count, 0) as user_count,
-                COALESCE(tp.average_returns, 0) as average_returns,
-                COALESCE(
-                    CASE
-                        WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float
-                        ELSE 0
-                    END,
-                    0
-                ) as hit_rate,
-                COALESCE(tp.total_returns, 0) as total_returns
-            FROM social.groups g
-            LEFT JOIN token_pick_stats tp ON g.id = tp.group_id
-            LEFT JOIN group_user_counts gu ON g.id = gu.group_id
+            {GROUP_SELECT_QUERY}
             WHERE g.id = $1
-            "#,
-        )
-        .bind(id)
-        .fetch_optional(self.db.as_ref())
-        .await
+            "#
+        );
+
+        sqlx::query_as::<_, Group>(&query)
+            .bind(id)
+            .fetch_optional(self.db.as_ref())
+            .await
     }
 
     pub async fn add_user_to_group(
@@ -171,30 +184,11 @@ impl GroupRepository {
     }
 
     pub async fn list_groups(&self, params: &ListGroupsQuery) -> Result<Vec<Group>, sqlx::Error> {
-        let mut query = r#"
-            WITH token_pick_stats AS (
-                SELECT
-                    group_id,
-                    COUNT(*) as total_picks,
-                    COUNT(CASE WHEN hit_date IS NOT NULL THEN 1 END) as hits,
-                    SUM(
-                        CASE
-                            WHEN highest_market_cap IS NOT NULL
-                                AND market_cap_at_call > 0
-                            THEN (highest_market_cap::float / market_cap_at_call::float)
-                            ELSE 0
-                        END
-                    ) as total_returns,
-                    AVG(
-                        CASE
-                            WHEN highest_market_cap IS NOT NULL
-                                AND market_cap_at_call > 0
-                        THEN (highest_market_cap::float / market_cap_at_call::float)
-                            ELSE 0
-                        END
-                    ) as average_returns
-                FROM social.token_picks
-                GROUP BY group_id
+        let mut query = format!(
+            r#"
+            {GROUP_STATS_CTE}
+            {QUALIFIED_TOKEN_PICKS_FILTER}
+            GROUP BY group_id
             ),
             group_user_counts AS (
                 SELECT
@@ -203,28 +197,9 @@ impl GroupRepository {
                 FROM social.group_users
                 GROUP BY group_id
             )
-            SELECT
-                g.id,
-                g.name,
-                g.logo_uri,
-                g.is_admin,
-                g.created_at,
-                COALESCE(tp.total_picks, 0) as token_pick_count,
-                COALESCE(gu.user_count, 0) as user_count,
-                COALESCE(tp.average_returns, 0) as average_returns,
-                COALESCE(
-                    CASE
-                        WHEN tp.total_picks > 0 THEN (tp.hits::float * 100) / tp.total_picks::float
-                        ELSE 0
-                    END,
-                    0
-                ) as hit_rate,
-                COALESCE(tp.total_returns, 0) as total_returns
-            FROM social.groups g
-            LEFT JOIN token_pick_stats tp ON g.id = tp.group_id
-            LEFT JOIN group_user_counts gu ON g.id = gu.group_id
-        "#
-        .to_string();
+            {GROUP_SELECT_QUERY}
+            "#
+        );
 
         if let Some(_user_id) = params.user_id {
             query.push_str(

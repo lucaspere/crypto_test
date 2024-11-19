@@ -13,7 +13,9 @@ use uuid::Uuid;
 use crate::{
     apis::{
         api_models::{
-            query::{ProfileLeaderboardQuery, ProfileLeaderboardSort, TokenQuery},
+            query::{
+                PickLeaderboardSort, ProfileLeaderboardQuery, ProfileLeaderboardSort, TokenQuery,
+            },
             response::LeaderboardResponse,
         },
         profile_handlers::ProfileQuery,
@@ -72,30 +74,6 @@ impl ProfileService {
         params: ProfileQuery,
         user_id: Option<Uuid>,
     ) -> Result<ProfileDetailsResponse, ApiError> {
-        info!(
-            "Attempting to fetch profile for username: {}",
-            params.username
-        );
-        let cache_key = format!(
-            "profile:{}:{}{}",
-            params.username,
-            params.picked_after.to_string(),
-            params
-                .group_id
-                .map_or(String::new(), |id| format!(":{}", id))
-        );
-        if let Some(cached_response) = self
-            .redis_service
-            .get_cached::<ProfileDetailsResponse>(&cache_key)
-            .await?
-        {
-            return Ok(cached_response);
-        }
-
-        info!(
-            "Cache miss, fetching profile from database for username: {}",
-            params.username
-        );
         let user = self
             .user_repository
             .find_by_username(&params.username)
@@ -131,11 +109,6 @@ impl ProfileService {
             is_following,
             ..Default::default()
         };
-
-        info!("Setting cache for profile: {}", params.username);
-        self.redis_service
-            .set_cached::<ProfileDetailsResponse>(&cache_key, &response, CACHE_TTL_SECONDS)
-            .await?;
 
         info!(
             "Profile fetched successfully for username: {}",
@@ -206,7 +179,7 @@ impl ProfileService {
             Some(ProfileLeaderboardSort::TotalPicks) => {
                 Decimal::from(profile.pick_summary.total_picks)
             }
-            Some(ProfileLeaderboardSort::AverageReturn) => profile.pick_summary.average_return,
+            Some(ProfileLeaderboardSort::AverageReturn) => profile.pick_summary.average_pick_return,
             Some(ProfileLeaderboardSort::GreatestHits) => profile.pick_summary.best_pick.multiplier,
             _ => Decimal::ZERO,
         };
@@ -240,6 +213,8 @@ impl ProfileService {
             get_all: Some(true),
             picked_after: params.picked_after.clone(),
             group_ids: params.group_ids.clone(),
+            order_by: Some(PickLeaderboardSort::Reached),
+            order_direction: Some("desc".to_string()),
             ..Default::default()
         };
 

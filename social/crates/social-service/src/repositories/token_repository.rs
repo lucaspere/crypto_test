@@ -18,6 +18,18 @@ use crate::{
     utils::{api_errors::ApiError, time::TimePeriod},
 };
 
+pub const QUALIFIED_TOKEN_PICKS_FILTER: &str = r#"
+    AND t.market_cap > 40000
+    AND CASE
+        WHEN t.market_cap < 1000000 THEN
+            t.liquidity >= (t.volume_24h * 0.04)
+        ELSE
+            t.liquidity >= 40000
+    END
+    AND t.liquidity IS NOT NULL
+    AND t.volume_24h IS NOT NULL
+"#;
+
 pub enum UserPickLimitScope {
     User(Uuid, TimePeriod),
 }
@@ -162,17 +174,18 @@ impl TokenRepository {
         &self,
         params: Option<&ListTokenPicksParams>,
     ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
-        let mut base_query = r#"
+        let mut base_query = format!(
+            r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
-            WHERE COALESCE(t.liquidity, 0) > 0 AND COALESCE(t.volume_24h, 0) > 0
-            AND 1=1
-        "#
-        .to_string();
+            WHERE 1=1
+            {QUALIFIED_TOKEN_PICKS_FILTER}
+            "#
+        );
 
         let mut where_clauses = Vec::new();
         let mut bind_values = Vec::new();
@@ -258,7 +271,8 @@ impl TokenRepository {
         &self,
         params: Option<&ListTokenPicksParams>,
     ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
-        let mut base_query = r#"
+        let mut base_query = format!(
+            r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user
@@ -266,8 +280,9 @@ impl TokenRepository {
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
             WHERE 1=1
-        "#
-        .to_string();
+            {QUALIFIED_TOKEN_PICKS_FILTER}
+            "#
+        );
 
         let mut bind_values = Vec::new();
         let mut bind_idx = 1;
@@ -334,18 +349,20 @@ impl TokenRepository {
     }
 
     pub async fn get_token_pick_by_id(&self, id: i64) -> Result<Option<TokenPick>, sqlx::Error> {
-        let query = r#"
+        let query = format!(
+            r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
-            WHERE COALESCE(t.liquidity, 0) > 0 AND COALESCE(t.volume_24h, 0) > 0
-            AND 1=1
-        "#;
+            WHERE tp.id = $1
+            {QUALIFIED_TOKEN_PICKS_FILTER}
+            "#
+        );
 
-        sqlx::query_as::<_, TokenPick>(query)
+        sqlx::query_as::<_, TokenPick>(&query)
             .bind(id)
             .fetch_optional(self.db.as_ref())
             .await

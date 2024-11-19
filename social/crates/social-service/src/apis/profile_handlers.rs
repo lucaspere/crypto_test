@@ -43,6 +43,11 @@ pub(super) async fn get_profile(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<ProfileQuery>,
 ) -> Result<(StatusCode, Json<ProfileDetailsResponse>), ApiError> {
+    let query = ProfileQuery {
+        username: query.username.clone(),
+        picked_after: TimePeriod::AllTime,
+        ..query
+    };
     let profile = app_state.profile_service.get_profile(query, None).await?;
     Ok((StatusCode::OK, profile.into()))
 }
