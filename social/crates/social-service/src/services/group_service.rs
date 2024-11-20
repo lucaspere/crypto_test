@@ -173,6 +173,10 @@ impl GroupService {
                     ProfileLeaderboardSort::TotalPicks => {
                         b.pick_summary.total_picks.cmp(&a.pick_summary.total_picks)
                     }
+                    ProfileLeaderboardSort::AverageReturn => b
+                        .pick_summary
+                        .average_pick_return
+                        .cmp(&a.pick_summary.average_pick_return),
                     _ => a.username.cmp(&b.username),
                 });
             }
