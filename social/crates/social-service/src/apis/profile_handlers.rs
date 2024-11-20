@@ -57,7 +57,7 @@ pub struct ProfileQuery {
     pub username: String,
     #[serde(default = "default_time_period")]
     pub picked_after: TimePeriod,
-    pub group_id: Option<i64>,
+    pub group_ids: Option<Vec<i64>>,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -109,6 +109,14 @@ pub(super) async fn leaderboard(
         return Err(ApiError::BadRequest(
             "Cannot use following without username".to_string(),
         ));
+    }
+    let mut params = params.clone();
+    if params.filter_by_group {
+        if let Some(user_id) = params.user_id {
+            let user_groups = app_state.group_service.get_user_groups(user_id).await?;
+
+            params.group_ids = Some(user_groups.iter().map(|g| g.id).collect());
+        }
     }
 
     let leaderboard = app_state.profile_service.list_profiles(&params).await?;

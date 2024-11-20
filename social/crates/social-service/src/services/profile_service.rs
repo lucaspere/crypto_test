@@ -93,7 +93,7 @@ impl ProfileService {
                 username: params.username.clone(),
                 picked_after: Some(params.picked_after.clone()),
                 multiplier: None,
-                group_ids: params.group_id.map(|id| vec![id]),
+                group_ids: params.group_ids.clone(),
             })
             .await?;
 
@@ -123,8 +123,15 @@ impl ProfileService {
             "leaderboard:{}:{}{}:{}",
             params.picked_after.to_string(),
             params
-                .group_id
-                .map_or(String::new(), |id| format!(":{}", id)),
+                .group_ids
+                .clone()
+                .map_or(String::new(), |ids| format!(
+                    ":{}",
+                    ids.iter()
+                        .map(|id| id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )),
             params.following,
             params
                 .username
@@ -138,12 +145,13 @@ impl ProfileService {
         {
             return Ok(cached_response);
         }
+
         let tokens = self
             .token_service
             .list_token_picks(TokenQuery {
                 get_all: Some(true),
                 picked_after: Some(params.picked_after.clone()),
-                group_ids: params.group_id.map(|id| vec![id]),
+                group_ids: params.group_ids.clone(),
                 following: params.following.then_some(true),
                 username: params.username.clone(),
                 ..Default::default()
@@ -160,7 +168,7 @@ impl ProfileService {
             let query = ProfileQuery {
                 username: username.clone(),
                 picked_after: params.picked_after.clone(),
-                group_id: params.group_id,
+                group_ids: params.group_ids.clone(),
             };
             self.get_profile(query, params.user_id)
         }))

@@ -68,7 +68,7 @@ pub struct GroupMembersQuery {
     pub order_direction: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug, Default)]
+#[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug, Default, Clone)]
 pub struct ProfileLeaderboardQuery {
     #[serde(default)]
     pub sort: Option<ProfileLeaderboardSort>,
@@ -76,11 +76,13 @@ pub struct ProfileLeaderboardQuery {
     pub order: Option<String>,
     #[serde(default = "default_time_period")]
     pub picked_after: TimePeriod,
-    pub group_id: Option<i64>,
+    pub group_ids: Option<Vec<i64>>,
     #[serde(default)]
     pub following: bool,
     pub username: Option<String>,
     pub user_id: Option<Uuid>,
+    #[serde(default)]
+    pub filter_by_group: bool,
 }
 
 #[derive(Deserialize, IntoParams, Default)]

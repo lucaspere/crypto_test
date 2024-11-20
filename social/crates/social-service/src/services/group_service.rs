@@ -141,7 +141,7 @@ impl GroupService {
                     ProfileQuery {
                         username: g.username.clone(),
                         picked_after: TimePeriod::AllTime,
-                        group_id: Some(group_id),
+                        group_ids: Some(vec![group_id]),
                     },
                     user_id,
                 )
