@@ -223,7 +223,10 @@ impl TokenService {
                     ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
                 })?;
 
-            pick.highest_market_cap = Some(ohlcv.high);
+            let supply = pick
+                .supply_at_call
+                .unwrap_or_else(|| latest_price.token_info.supply);
+            pick.highest_market_cap = Some(ohlcv.high * supply);
             let hit_2x = calculate_price_multiplier(&pick.market_cap_at_call, &ohlcv.high)
                 >= Decimal::from(2);
             if hit_2x {
@@ -318,7 +321,10 @@ impl TokenService {
                     ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
                 })?;
 
-            pick_row.highest_market_cap = Some(ohlcv.high);
+            let supply = pick_row
+                .supply_at_call
+                .unwrap_or_else(|| metadata.token_info.supply);
+            pick_row.highest_market_cap = Some(ohlcv.high * supply);
             has_update = true;
         }
 
