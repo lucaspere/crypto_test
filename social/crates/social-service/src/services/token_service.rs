@@ -78,14 +78,20 @@ impl TokenService {
         query: TokenQuery,
     ) -> Result<(Vec<TokenPickResponse>, i64), ApiError> {
         debug!("Listing token picks with query: {:?}", query);
-
+        let mut query = query.clone();
         let user = if let Some(username) = &query.username {
             debug!("Looking up user by username: {}", username);
             self.user_service.get_by_username(username).await?
         } else {
             None
         };
+        if query.filter_by_group {
+            if let Some(user_id) = query.user_id {
+                let user_groups = self.group_service.get_user_groups(user_id).await?;
 
+                query.group_ids = Some(user_groups.iter().map(|g| g.id).collect());
+            }
+        }
         let params = ListTokenPicksParams {
             user_id: user.map(|u| u.id),
             page: query.page,
@@ -477,6 +483,8 @@ impl TokenService {
                 group_ids: Some(groups.iter().map(|g| g.id).collect()),
                 picked_after: None,
                 following: None,
+                filter_by_group: false,
+                user_id: None,
             })
             .await
             .map_err(ApiError::from)?;

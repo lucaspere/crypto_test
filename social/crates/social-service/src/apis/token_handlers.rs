@@ -34,6 +34,7 @@ pub(super) async fn get_token_picks(
 ) -> Result<(StatusCode, Json<PaginatedTokenPickResponse>), ApiError> {
     let limit = query.limit;
     let page = query.page;
+
     let (picks, total) = app_state.token_service.list_token_picks(query).await?;
     let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
 

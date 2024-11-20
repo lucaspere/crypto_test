@@ -16,7 +16,7 @@ pub enum ProfileLeaderboardSort {
     GreatestHits,
 }
 
-#[derive(Debug, Deserialize, IntoParams, Default)]
+#[derive(Debug, Deserialize, IntoParams, Default, Clone)]
 pub struct TokenQuery {
     pub username: Option<String>,
     pub picked_after: Option<TimePeriod>,
@@ -31,6 +31,9 @@ pub struct TokenQuery {
     pub group_ids: Option<Vec<i64>>,
     #[param(default = false)]
     pub following: Option<bool>,
+    #[param(default = false)]
+    pub filter_by_group: bool,
+    pub user_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, ToSchema, Default)]
