@@ -213,11 +213,11 @@ impl TokenService {
 
         let current_market_cap = latest_price.market_cap;
         let mut has_update = false;
-        if pick.highest_market_cap.is_none() {
+        if pick.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
             let ohlcv = self
                 .birdeye_service
                 .get_ohlcv_request(
-                    &pick.token.chain,
+                    "solana",
                     &pick.token.address,
                     pick.call_date.timestamp(),
                     Utc::now().timestamp(),
@@ -308,7 +308,7 @@ impl TokenService {
             return Ok((TokenPickResponse::from(pick_row.clone()), false));
         }
 
-        if pick_row.highest_market_cap.is_none() {
+        if pick_row.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
             let ohlcv = self
                 .birdeye_service
                 .get_ohlcv_request(
