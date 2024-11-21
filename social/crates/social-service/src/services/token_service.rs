@@ -7,7 +7,6 @@ use chrono::Utc;
 use futures::future::join_all;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::{prelude::One, Decimal};
-use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -26,7 +25,7 @@ use crate::{
         tokens::{Token, TokenPickRequest},
     },
     repositories::token_repository::{
-        ListTokenPicksParams, TokenPickRow, TokenRepository, UserPickLimitScope,
+        ListTokenPicksParams, TokenRepository, UserPickLimitScope,
     },
     services::user_service::UserService,
     utils::{
@@ -313,7 +312,7 @@ impl TokenService {
 
     pub async fn process_single_pick_with_metadata(
         &self,
-        pick_row: &mut TokenPickRow,
+        pick_row: &mut TokenPick,
         metadata: &LatestTokenMetadataResponse,
     ) -> Result<(TokenPickResponse, bool), ApiError> {
         info!(
@@ -415,13 +414,13 @@ impl TokenService {
             .unwrap_or_else(|| None);
 
         let token_pick = TokenPick {
-            token: Json(token_info.clone().into()),
+            token: token_info.clone().into(),
             call_date: call_date.unwrap_or(chrono::Utc::now()).into(),
             group_id: pick.telegram_chat_id.parse().map_err(|e| {
                 error!("Failed to parse telegram chat id: {}", e);
                 ApiError::InternalServerError("Invalid telegram chat id".to_string())
             })?,
-            user: Json(user.clone()),
+            user: user.clone(),
             telegram_message_id: Some(pick.telegram_message_id.parse().map_err(|e| {
                 error!("Failed to parse telegram message id: {}", e);
                 ApiError::InternalServerError("Invalid telegram message id".to_string())
@@ -519,7 +518,7 @@ impl TokenService {
         Ok(count >= Self::MAX_PICK_LIMIT)
     }
 
-    pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPickRow>>, ApiError> {
+    pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPick>>, ApiError> {
         info!("Getting all tokens with picks");
         self.token_repository
             .get_all_tokens_with_picks_group_by_group_id()
@@ -542,7 +541,7 @@ impl TokenService {
 
     async fn initialize_highest_market_cap(
         &self,
-        pick_row: &mut TokenPickRow,
+        pick_row: &mut TokenPick,
         metadata: &LatestTokenMetadataResponse,
     ) -> Result<bool, ApiError> {
         let ohlcv = self
@@ -577,7 +576,7 @@ impl TokenService {
 
     fn update_highest_market_cap(
         &self,
-        pick_row: &mut TokenPickRow,
+        pick_row: &mut TokenPick,
         current_market_cap: Decimal,
     ) -> bool {
         let diff = calculate_price_multiplier(
@@ -637,7 +636,7 @@ impl TokenService {
         info!("Fetching metadata for {} picks", picks.len());
         let addresses: Vec<String> = picks
             .iter()
-            .map(|pick| pick.token_address.clone())
+            .map(|pick| pick.token.address.clone())
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
@@ -655,7 +654,7 @@ impl TokenService {
             .par_iter_mut()
             .filter_map(|pick| {
                 metadata
-                    .get(&pick.token_address)
+                    .get(&pick.token.address)
                     .and_then(|token_metadata| {
                         futures::executor::block_on(
                             self.process_single_pick_with_metadata(pick, token_metadata),
