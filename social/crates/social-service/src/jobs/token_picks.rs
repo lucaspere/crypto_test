@@ -4,7 +4,6 @@ use rayon::{
     iter::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSlice,
 };
-use rust_decimal::prelude::ToPrimitive;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::sync::Semaphore;
 use tracing::{debug, info, instrument, Span};
@@ -183,45 +182,27 @@ async fn update_pick_stats(
         (RedisKeys::LEADERBOARD_1Y, chrono::Duration::days(365)),
     ];
 
-    let futures = timeframes.iter().map(|(timeframe, duration)| {
-        let pick = pick.clone();
-        let app_state = app_state;
-
-        async move {
-            if pick.call_date > (Utc::now() - *duration) {
-                update_timeframe_leaderboard(&app_state, &pick, timeframe).await?;
-            }
-            Ok::<_, ApiError>(())
-        }
-    });
-
-    futures::future::join_all(futures).await;
-    Ok(())
-}
-
-async fn update_timeframe_leaderboard(
-    app_state: &ServiceContainer,
-    pick: &TokenPickResponse,
-    timeframe: &str,
-) -> Result<(), ApiError> {
-    let returns_key = RedisKeys::get_leaderboard_key(timeframe, RedisKeys::METRIC_RETURNS);
-    let hit_rate_key = RedisKeys::get_leaderboard_key(timeframe, RedisKeys::METRIC_HIT_RATE);
-    let total_picks_key = RedisKeys::get_leaderboard_key(timeframe, RedisKeys::METRIC_TOTAL_PICKS);
-
     let mut pipe = redis::pipe();
+    pipe.atomic();
 
-    // Update leaderboards
-    pipe.zadd(
-        &returns_key,
-        &pick.token.address,
-        pick.highest_mult_post_call.to_f64().unwrap_or_default(),
-    );
+    // Batch all Redis operations into a single atomic pipeline
+    for (timeframe, duration) in timeframes.iter() {
+        if pick.call_date > (Utc::now() - *duration) {
+            let zset_key = RedisKeys::get_group_leaderboard_key(pick.group_id, timeframe);
+            let hash_key = RedisKeys::get_group_leaderboard_data_key(pick.group_id, timeframe);
 
-    if pick.hit_date.is_some() {
-        pipe.zincr(&hit_rate_key, &pick.token.address, 1.0);
+            pipe.zadd(&zset_key, pick.id.to_string(), pick.highest_mult_post_call);
+
+            if let Ok(json_data) = serde_json::to_string(&pick) {
+                pipe.hset(&hash_key, pick.id.to_string(), json_data);
+            }
+
+            let ttl = RedisKeys::get_ttl_for_timeframe(timeframe);
+
+            pipe.expire(&zset_key, ttl);
+            pipe.expire(&hash_key, ttl);
+        }
     }
-
-    pipe.zincr(&total_picks_key, &pick.token.address, 1.0);
 
     app_state.redis_service.execute_pipe(pipe).await?;
     Ok(())

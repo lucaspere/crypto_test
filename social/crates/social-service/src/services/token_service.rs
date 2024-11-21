@@ -3,16 +3,16 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::Utc;
 use futures::future::join_all;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use rust_decimal::{
-    prelude::{One, ToPrimitive},
-    Decimal,
-};
+use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
-    apis::{api_models::query::TokenQuery, token_handlers::TokenGroupQuery},
+    apis::{
+        api_models::query::TokenQuery, group_handlers::GroupLeaderboardQuery,
+        token_handlers::TokenGroupQuery,
+    },
     external_services::{
         birdeye::BirdeyeService,
         rust_monorepo::{get_latest_w_metadata::LatestTokenMetadataResponse, RustMonorepoService},
@@ -26,7 +26,10 @@ use crate::{
         ListTokenPicksParams, TokenPickRow, TokenRepository, UserPickLimitScope,
     },
     services::user_service::UserService,
-    utils::{api_errors::ApiError, math::calculate_price_multiplier, time::TimePeriod},
+    utils::{
+        api_errors::ApiError, math::calculate_price_multiplier, redis_keys::RedisKeys,
+        time::TimePeriod,
+    },
 };
 
 use super::{group_service::GroupService, redis_service::RedisService};
@@ -599,14 +602,15 @@ impl TokenService {
     pub async fn get_group_leaderboard(
         &self,
         group_id: i64,
-        limit: i64,
+        query: &GroupLeaderboardQuery,
     ) -> Result<Vec<TokenPickResponse>, ApiError> {
-        let zset_key = format!("group:{}:leaderboard:index", group_id);
-        let hash_key = format!("group:{}:leaderboard:data", group_id);
+        let zset_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe);
+        let hash_key = RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe);
 
+        // Try to get from Redis first
         if let Ok(pick_ids) = self
             .redis_service
-            .zrange_by_score(&zset_key, 0, limit as isize)
+            .zrange_by_score(&zset_key, 0, query.limit as isize)
             .await
         {
             if !pick_ids.is_empty() {
@@ -620,10 +624,13 @@ impl TokenService {
             }
         }
 
+        // Get from database if not in cache
         let mut picks = self
             .token_repository
-            .get_group_leaderboard(group_id, limit)
+            .get_group_leaderboard(group_id, query.limit)
             .await?;
+
+        // Process picks and update Redis
         let picks_grouped_by_address: HashMap<String, Vec<&TokenPickRow>> = picks
             .par_iter()
             .fold_with(
@@ -651,21 +658,39 @@ impl TokenService {
             .get_latest_w_metadata(&addresses)
             .await?;
 
-        let mut responses = Vec::with_capacity(picks.len());
         let mut pipe = redis::pipe();
         pipe.atomic();
 
-        for pick in &mut picks {
-            if let Some(token_metadata) = metadata.get(&pick.token_address) {
-                let (response, _) = self
-                    .process_single_pick_with_metadata(pick, token_metadata)
-                    .await?;
+        let processing_futures = picks.iter_mut().map(|pick| {
+            let metadata = metadata.get(&pick.token_address).cloned();
+            let zset_key = zset_key.clone();
+            let hash_key = hash_key.clone();
+            let token_service = self;
 
-                pipe.zadd(
-                    &zset_key,
-                    response.id.to_string(),
-                    response.highest_mult_post_call,
-                );
+            async move {
+                if let Some(token_metadata) = metadata {
+                    let (response, _) = token_service
+                        .process_single_pick_with_metadata(pick, &token_metadata)
+                        .await?;
+
+                    Ok::<(String, String, f32, TokenPickResponse), ApiError>((
+                        zset_key,
+                        hash_key,
+                        response.highest_mult_post_call,
+                        response,
+                    ))
+                } else {
+                    Err(ApiError::InternalError("Missing metadata".to_string()))
+                }
+            }
+        });
+
+        let results = futures::future::join_all(processing_futures).await;
+        let mut responses = Vec::with_capacity(picks.len());
+
+        for result in results {
+            if let Ok((zset_key, hash_key, score, response)) = result {
+                pipe.zadd(&zset_key, response.id.to_string(), score);
 
                 if let Ok(json_data) = serde_json::to_string(&response) {
                     pipe.hset(&hash_key, response.id.to_string(), json_data);
@@ -675,16 +700,28 @@ impl TokenService {
             }
         }
 
-        pipe.expire(&zset_key, 3600);
-        pipe.expire(&hash_key, 3600);
+        let ttl = RedisKeys::get_ttl_for_timeframe(&query.timeframe);
+
+        pipe.expire(&zset_key, ttl);
+        pipe.expire(&hash_key, ttl);
 
         if let Ok(()) = self.redis_service.execute_pipe(pipe).await {
             debug!(
-                "Successfully cached group leaderboard for group {}",
-                group_id
+                "Successfully cached group leaderboard for group {} with timeframe {}",
+                group_id, query.timeframe
             );
         }
 
         Ok(responses)
+    }
+
+    pub async fn update_group_leaderboard_cache(
+        &self,
+        group_id: i64,
+        query: &GroupLeaderboardQuery,
+    ) -> Result<(), ApiError> {
+        let leaderboard_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe);
+        self.redis_service.delete_cached(&leaderboard_key).await?;
+        Ok(())
     }
 }

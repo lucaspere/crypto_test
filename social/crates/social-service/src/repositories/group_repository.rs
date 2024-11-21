@@ -276,4 +276,14 @@ impl GroupRepository {
 
         Ok((members, group_name, total))
     }
+
+    pub async fn group_exists(&self, group_id: i64) -> Result<bool, sqlx::Error> {
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM social.groups WHERE id = $1)")
+                .bind(group_id)
+                .fetch_one(self.db.as_ref())
+                .await?;
+
+        Ok(exists)
+    }
 }

@@ -12,7 +12,10 @@ use uuid::Uuid;
 
 use crate::{
     apis::api_models::query::{GroupMembersQuery, ListGroupMembersQuery},
-    models::groups::{CreateOrUpdateGroup, GroupUser},
+    models::{
+        groups::{CreateOrUpdateGroup, GroupUser},
+        token_picks::TokenPickResponse,
+    },
     utils::{api_errors::ApiError, ErrorResponse},
     AppState,
 };
@@ -317,4 +320,54 @@ pub(super) async fn leaderboard(
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok((StatusCode::OK, Json(LeaderboardGroupResponse(groups))))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct GroupLeaderboardQuery {
+    #[param(default = 10)]
+    pub limit: i64,
+    #[param(default = false)]
+    pub force_refresh: bool,
+    #[param(default = "24h")]
+    pub timeframe: String,
+}
+
+/// Get the top token picks for a specific group
+#[utoipa::path(
+    get,
+    tag = GROUP_TAG,
+    path = "/{id}/leaderboard",
+    responses(
+        (status = 200, description = "Group leaderboard", body = Vec<TokenPickResponse>),
+        (status = 404, description = "Group not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse),
+    ),
+    params(
+        ("id" = i64, Path, description = "Group ID"),
+        GroupLeaderboardQuery
+    )
+)]
+pub async fn get_group_leaderboard(
+    State(app_state): State<Arc<AppState>>,
+    Path(group_id): Path<i64>,
+    Query(query): Query<GroupLeaderboardQuery>,
+) -> Result<(StatusCode, Json<Vec<TokenPickResponse>>), ApiError> {
+    if !app_state.group_service.group_exists(group_id).await? {
+        return Err(ApiError::NotFound("Group not found".to_string()));
+    }
+
+    // Force refresh if requested
+    if query.force_refresh {
+        app_state
+            .token_service
+            .update_group_leaderboard_cache(group_id, &query)
+            .await?;
+    }
+
+    let picks = app_state
+        .token_service
+        .get_group_leaderboard(group_id, &query)
+        .await?;
+
+    Ok((StatusCode::OK, Json(picks)))
 }

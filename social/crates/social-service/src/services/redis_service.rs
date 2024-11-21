@@ -153,4 +153,43 @@ impl RedisService {
             .await?;
         Ok(())
     }
+
+    pub async fn zrange_by_score(
+        &self,
+        key: &str,
+        start: isize,
+        stop: isize,
+    ) -> Result<Vec<String>, RedisError> {
+        let mut connection = self.connection.clone();
+        redis::cmd("ZREVRANGE")
+            .arg(key)
+            .arg(start)
+            .arg(stop)
+            .query_async(&mut connection)
+            .await
+    }
+
+    pub async fn hget_multiple<T: DeserializeOwned>(
+        &self,
+        key: &str,
+        fields: &[String],
+    ) -> Result<Option<Vec<T>>, RedisError> {
+        let mut connection = self.connection.clone();
+        let values: Vec<Option<String>> = redis::cmd("HMGET")
+            .arg(key)
+            .arg(fields)
+            .query_async(&mut connection)
+            .await?;
+
+        let results: Vec<T> = values
+            .into_iter()
+            .filter_map(|v| v.and_then(|s| serde_json::from_str(&s).ok()))
+            .collect();
+
+        if results.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(results))
+        }
+    }
 }

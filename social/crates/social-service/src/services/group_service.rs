@@ -189,4 +189,14 @@ impl GroupService {
             ))
         }
     }
+
+    pub async fn group_exists(&self, group_id: i64) -> Result<bool, ApiError> {
+        self.repository.group_exists(group_id).await.map_err(|e| {
+            if e.to_string().contains("sqlx::error::RowNotFound") {
+                ApiError::NotFound("Group not found".to_string())
+            } else {
+                ApiError::DatabaseError(e)
+            }
+        })
+    }
 }
