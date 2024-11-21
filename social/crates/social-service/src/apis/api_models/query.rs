@@ -116,3 +116,7 @@ impl ToString for PickLeaderboardSort {
         }
     }
 }
+
+pub fn default_limit() -> i64 {
+    10
+}
