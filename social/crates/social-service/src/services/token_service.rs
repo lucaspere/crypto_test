@@ -2,8 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rust_decimal::{prelude::One, Decimal};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rust_decimal::{
+    prelude::{One, ToPrimitive},
+    Decimal,
+};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -165,10 +168,7 @@ impl TokenService {
         &self,
         pick: &mut TokenPick,
     ) -> Result<TokenPickResponse, ApiError> {
-        let cache_key = format!(
-            "token_pick:{}:{}:{}",
-            pick.id, pick.user.id, pick.token.address
-        );
+        let cache_key = format!("token_pick:{}", pick.id);
 
         if let Ok(Some(cached_pick)) = self
             .redis_service
@@ -594,5 +594,97 @@ impl TokenService {
             return true;
         }
         false
+    }
+
+    pub async fn get_group_leaderboard(
+        &self,
+        group_id: i64,
+        limit: i64,
+    ) -> Result<Vec<TokenPickResponse>, ApiError> {
+        let zset_key = format!("group:{}:leaderboard:index", group_id);
+        let hash_key = format!("group:{}:leaderboard:data", group_id);
+
+        if let Ok(pick_ids) = self
+            .redis_service
+            .zrange_by_score(&zset_key, 0, limit as isize)
+            .await
+        {
+            if !pick_ids.is_empty() {
+                if let Ok(Some(cached_data)) = self
+                    .redis_service
+                    .hget_multiple::<TokenPickResponse>(&hash_key, &pick_ids)
+                    .await
+                {
+                    return Ok(cached_data);
+                }
+            }
+        }
+
+        let mut picks = self
+            .token_repository
+            .get_group_leaderboard(group_id, limit)
+            .await?;
+        let picks_grouped_by_address: HashMap<String, Vec<&TokenPickRow>> = picks
+            .par_iter()
+            .fold_with(
+                HashMap::<String, Vec<&TokenPickRow>>::with_capacity(picks.len()),
+                |mut acc, pick| {
+                    acc.entry(pick.token_address.clone())
+                        .or_default()
+                        .push(pick);
+                    acc
+                },
+            )
+            .reduce(
+                || HashMap::with_capacity(picks.len()),
+                |mut acc1, acc2| {
+                    for (key, value) in acc2 {
+                        acc1.entry(key).or_default().extend(value);
+                    }
+                    acc1
+                },
+            );
+
+        let addresses = Vec::from_iter(picks_grouped_by_address.keys().cloned());
+        let metadata = self
+            .rust_monorepo_service
+            .get_latest_w_metadata(&addresses)
+            .await?;
+
+        let mut responses = Vec::with_capacity(picks.len());
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+
+        for pick in &mut picks {
+            if let Some(token_metadata) = metadata.get(&pick.token_address) {
+                let (response, _) = self
+                    .process_single_pick_with_metadata(pick, token_metadata)
+                    .await?;
+
+                pipe.zadd(
+                    &zset_key,
+                    response.id.to_string(),
+                    response.highest_mult_post_call,
+                );
+
+                if let Ok(json_data) = serde_json::to_string(&response) {
+                    pipe.hset(&hash_key, response.id.to_string(), json_data);
+                }
+
+                responses.push(response);
+            }
+        }
+
+        pipe.expire(&zset_key, 3600);
+        pipe.expire(&hash_key, 3600);
+
+        if let Ok(()) = self.redis_service.execute_pipe(pipe).await {
+            debug!(
+                "Successfully cached group leaderboard for group {}",
+                group_id
+            );
+        }
+
+        Ok(responses)
     }
 }
