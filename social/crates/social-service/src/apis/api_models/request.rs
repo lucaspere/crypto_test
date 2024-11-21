@@ -15,6 +15,7 @@ pub struct CreateGroupRequest {
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddUserRequest {
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
     pub telegram_id: Option<i64>,
 }
