@@ -383,11 +383,8 @@ impl TokenRepository {
         let mut tx = self.db.begin().await?;
 
         for pick in picks {
-            let highest_market_cap = pick.highest_market_cap.unwrap_or_default();
-            let rounded_market_cap = highest_market_cap.round_dp(8);
-
             let result = sqlx::query(&query)
-                .bind(rounded_market_cap)
+                .bind(pick.highest_market_cap)
                 .bind(pick.hit_date)
                 .bind(pick.id)
                 .execute(tx.as_mut())
@@ -465,7 +462,7 @@ impl TokenRepository {
 			WHERE id = $3
 			"#,
         )
-        .bind(new_highest_market_cap.round_dp(8))
+        .bind(new_highest_market_cap)
         .bind(new_hit_date)
         .bind(pick_id)
         .execute(self.db.as_ref())
