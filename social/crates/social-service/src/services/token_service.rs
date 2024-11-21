@@ -211,7 +211,7 @@ impl TokenService {
             .get(&pick.token.address)
             .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
 
-        let current_market_cap = latest_price.market_cap;
+        let current_market_cap = latest_price.price * latest_price.token_info.supply;
         let mut has_update = false;
         if pick.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
             let ohlcv = self
@@ -242,12 +242,20 @@ impl TokenService {
         }
 
         // Check if we need to update the highest market cap
-        if current_market_cap > pick.highest_market_cap.unwrap_or_default() {
+        let diff = calculate_price_multiplier(
+            &pick.highest_market_cap.unwrap_or_default(),
+            &current_market_cap,
+        );
+        if current_market_cap > pick.highest_market_cap.unwrap_or_default()
+            && diff < Decimal::from(20)
+        {
             debug!(
-                "Updating highest market cap for token pick {}. Old: {}, New: {}",
+                "Updating highest market cap for token pick {}. Old: {}, New: {}. With price {} and supply {}",
                 pick.id,
                 pick.highest_market_cap.unwrap_or_default(),
-                current_market_cap
+                current_market_cap,
+                latest_price.price,
+                latest_price.token_info.supply
             );
 
             pick.highest_market_cap = Some(current_market_cap);
@@ -297,9 +305,7 @@ impl TokenService {
         pick_row: &mut TokenPickRow,
         metadata: &LatestTokenMetadataResponse,
     ) -> Result<(TokenPickResponse, bool), ApiError> {
-        let current_market_cap = metadata.market_cap;
-        let mut has_update = false;
-
+        // Early return if token doesn't meet qualification criteria
         if !TokenPick::is_qualified(
             metadata.market_cap,
             metadata.metadata.liquidity,
@@ -308,45 +314,20 @@ impl TokenService {
             return Ok((TokenPickResponse::from(pick_row.clone()), false));
         }
 
+        let current_market_cap = metadata.price * metadata.token_info.supply;
+        let mut has_update = false;
+
+        // Initialize highest market cap if not set
         if pick_row.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
-            let ohlcv = self
-                .birdeye_service
-                .get_ohlcv_request(
-                    "solana",
-                    &metadata.address,
-                    pick_row.call_date.timestamp(),
-                    Utc::now().timestamp(),
-                    "1H",
-                )
-                .await
-                .map_err(|e| {
-                    error!(
-                        "Failed to fetch OHLCV for token pick {}: {}",
-                        pick_row.id, e
-                    );
-                    ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
-                })?;
-
-            let supply = pick_row
-                .supply_at_call
-                .unwrap_or_else(|| metadata.token_info.supply);
-            pick_row.highest_market_cap = Some(ohlcv.high * supply);
-            has_update = true;
+            has_update = self
+                .initialize_highest_market_cap(pick_row, metadata)
+                .await?;
         }
 
-        // Check if we need to update the highest market cap
-        if current_market_cap > pick_row.highest_market_cap.unwrap_or_default() {
-            info!(
-                "Updating highest market cap for token pick {}. Old: {}, New: {}",
-                pick_row.id,
-                pick_row.highest_market_cap.unwrap_or_default(),
-                current_market_cap
-            );
+        // Update highest market cap if current is higher (with sanity check)
+        has_update |= self.update_highest_market_cap(pick_row, current_market_cap);
 
-            pick_row.highest_market_cap = Some(current_market_cap);
-
-            has_update = true;
-        }
+        // Calculate multipliers and update hit date
         pick_row.highest_multiplier = Some(
             calculate_price_multiplier(
                 &pick_row.market_cap_at_call,
@@ -354,11 +335,13 @@ impl TokenService {
             )
             .round_dp(2),
         );
+
         if pick_row.highest_multiplier.unwrap_or_default() > Decimal::from(2) {
             pick_row.hit_date = Some(Utc::now().into());
             has_update = true;
         }
 
+        // Create response with current metrics
         let mut pick_response = TokenPickResponse::from(pick_row.clone());
         pick_response.current_market_cap = current_market_cap.round_dp(2);
         pick_response.current_multiplier =
@@ -545,5 +528,60 @@ impl TokenService {
     pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), ApiError> {
         self.token_repository.save_many_tokens(tokens).await?;
         Ok(())
+    }
+
+    async fn initialize_highest_market_cap(
+        &self,
+        pick_row: &mut TokenPickRow,
+        metadata: &LatestTokenMetadataResponse,
+    ) -> Result<bool, ApiError> {
+        let ohlcv = self
+            .birdeye_service
+            .get_ohlcv_request(
+                "solana",
+                &metadata.address,
+                pick_row.call_date.timestamp(),
+                Utc::now().timestamp(),
+                "1H",
+            )
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to fetch OHLCV for token pick {}: {}",
+                    pick_row.id, e
+                );
+                ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
+            })?;
+
+        let supply = pick_row
+            .supply_at_call
+            .unwrap_or_else(|| metadata.token_info.supply);
+        pick_row.highest_market_cap = Some(ohlcv.high * supply);
+        Ok(true)
+    }
+
+    fn update_highest_market_cap(
+        &self,
+        pick_row: &mut TokenPickRow,
+        current_market_cap: Decimal,
+    ) -> bool {
+        let diff = calculate_price_multiplier(
+            &pick_row.highest_market_cap.unwrap_or_default(),
+            &current_market_cap,
+        );
+
+        if current_market_cap > pick_row.highest_market_cap.unwrap_or_default()
+            && diff < Decimal::from(20)
+        {
+            info!(
+                "Updating highest market cap for token pick {}. Old: {}, New: {}",
+                pick_row.id,
+                pick_row.highest_market_cap.unwrap_or_default(),
+                current_market_cap,
+            );
+            pick_row.highest_market_cap = Some(current_market_cap);
+            return true;
+        }
+        false
     }
 }
