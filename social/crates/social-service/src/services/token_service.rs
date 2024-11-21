@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::Utc;
 use futures::future::join_all;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rust_decimal::Decimal;
+use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -232,7 +232,12 @@ impl TokenService {
             let supply = pick
                 .supply_at_call
                 .unwrap_or_else(|| latest_price.token_info.supply);
-            pick.highest_market_cap = Some(ohlcv.high * supply);
+            let highest_market_cap = ohlcv.high * supply;
+            pick.highest_market_cap = if highest_market_cap < Decimal::one() {
+                Some(pick.market_cap_at_call)
+            } else {
+                Some(highest_market_cap)
+            };
             let hit_2x = calculate_price_multiplier(&pick.market_cap_at_call, &ohlcv.high)
                 >= Decimal::from(2);
             if hit_2x {
@@ -246,7 +251,7 @@ impl TokenService {
             &pick.highest_market_cap.unwrap_or_default(),
             &current_market_cap,
         );
-        if current_market_cap > pick.highest_market_cap.unwrap_or_default()
+        if current_market_cap.round_dp(2) > pick.highest_market_cap.unwrap_or_default().round_dp(2)
             && diff < Decimal::from(20)
         {
             debug!(
@@ -556,7 +561,12 @@ impl TokenService {
         let supply = pick_row
             .supply_at_call
             .unwrap_or_else(|| metadata.token_info.supply);
-        pick_row.highest_market_cap = Some(ohlcv.high * supply);
+        let highest_market_cap = ohlcv.high * supply;
+        pick_row.highest_market_cap = if highest_market_cap < Decimal::one() {
+            Some(pick_row.market_cap_at_call)
+        } else {
+            Some(highest_market_cap)
+        };
         Ok(true)
     }
 
@@ -570,7 +580,8 @@ impl TokenService {
             &current_market_cap,
         );
 
-        if current_market_cap > pick_row.highest_market_cap.unwrap_or_default()
+        if current_market_cap.round_dp(2)
+            > pick_row.highest_market_cap.unwrap_or_default().round_dp(2)
             && diff < Decimal::from(20)
         {
             info!(
