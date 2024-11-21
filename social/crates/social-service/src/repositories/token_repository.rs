@@ -4,14 +4,14 @@ use chrono::{DateTime, FixedOffset};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rust_decimal::Decimal;
 use serde::Deserialize;
-use sqlx::{types::Json, PgPool};
+use sqlx::PgPool;
 use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
     apis::api_models::query::PickLeaderboardSort,
     models::{
-        token_picks::{TokenPick, TokenPickResponse},
+        token_picks::{TokenPick, TokenPickResponse, TokenPicksGroup},
         tokens::{Chain, Token},
     },
     utils::{api_errors::ApiError, time::TimePeriod},
@@ -525,21 +525,40 @@ impl TokenRepository {
 
     pub async fn get_all_tokens_with_picks_group_by_group_id(
         &self,
-    ) -> Result<HashMap<String, Vec<TokenPickRow>>, sqlx::Error> {
+    ) -> Result<HashMap<String, Vec<TokenPick>>, sqlx::Error> {
         let query = r#"
-            SELECT t.address, json_agg(tp.*) as picks
+            SELECT t.address,
+                   json_agg(
+                       json_build_object(
+                           'id', tp.id,
+                           'group_id', tp.group_id,
+                           'token', row_to_json(t),
+                           'user', row_to_json(u),
+                           'telegram_message_id', tp.telegram_message_id,
+                           'telegram_id', tp.telegram_id,
+                           'price_at_call', tp.price_at_call,
+                           'market_cap_at_call', tp.market_cap_at_call,
+                           'supply_at_call', tp.supply_at_call,
+                           'call_date', tp.call_date,
+                           'highest_market_cap', tp.highest_market_cap,
+                           'highest_multiplier', tp.highest_multiplier,
+                           'hit_date', tp.hit_date
+                       )
+                   ) as picks
             FROM social.tokens t
             JOIN social.token_picks tp ON t.address = tp.token_address
+            JOIN public.user u ON tp.user_id = u.id
             GROUP BY t.address
         "#;
 
-        let tokens = sqlx::query_as::<_, TokenWithPicks>(query)
+        let groups = sqlx::query_as::<_, TokenPicksGroup>(query)
             .fetch_all(self.db.as_ref())
             .await?;
-        let mut result: HashMap<String, Vec<TokenPickRow>> = HashMap::new();
-        for token in tokens {
-            result.entry(token.address).or_insert_with(|| token.picks.0);
-        }
+
+        let result = groups
+            .into_iter()
+            .map(|group| (group.address, group.picks))
+            .collect();
 
         Ok(result)
     }
@@ -596,12 +615,15 @@ impl TokenRepository {
         &self,
         group_id: i64,
         limit: i64,
-    ) -> Result<Vec<TokenPickRow>, sqlx::Error> {
+    ) -> Result<Vec<TokenPick>, sqlx::Error> {
         let query = format!(
             r#"
-            SELECT tp.*
+            SELECT tp.*,
+                   row_to_json(t) AS token,
+                   row_to_json(u) AS user
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
+            JOIN public.user u ON tp.user_id = u.id
             WHERE tp.group_id = $1
             {TOKEN_PICKS_FILTER_WITH_NULLS}
             {QUALIFIED_TOKEN_PICKS_FILTER}
@@ -610,18 +632,12 @@ impl TokenRepository {
         "#,
         );
 
-        sqlx::query_as::<_, TokenPickRow>(&query)
+        sqlx::query_as::<_, TokenPick>(&query)
             .bind(group_id)
             .bind(limit)
             .fetch_all(self.db.as_ref())
             .await
     }
-}
-
-#[derive(Debug, sqlx::FromRow)]
-struct TokenWithPicks {
-    address: String,
-    picks: Json<Vec<TokenPickRow>>,
 }
 
 #[derive(Debug, sqlx::FromRow, Deserialize, Clone)]

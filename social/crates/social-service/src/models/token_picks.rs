@@ -13,7 +13,7 @@ use rust_decimal::{
     Decimal,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{types::Json, FromRow};
+use sqlx::FromRow;
 use utoipa::{IntoParams, ToSchema};
 
 pub const HIT_MULTIPLIER: u8 = 2;
@@ -21,9 +21,10 @@ pub const HIT_MULTIPLIER: u8 = 2;
 #[derive(Clone, Debug, FromRow, Serialize, Deserialize, Default)]
 pub struct TokenPick {
     pub id: i64,
-    pub token: Json<Token>,
     #[sqlx(json)]
-    pub user: Json<User>,
+    pub token: Token,
+    #[sqlx(json)]
+    pub user: User,
     pub group_id: i64,
     pub telegram_message_id: Option<i64>,
     pub telegram_id: Option<i64>,
@@ -129,7 +130,7 @@ impl From<TokenPick> for TokenPickResponse {
             .parse::<f32>()
             .unwrap_or_default();
 
-        let current_market_cap = pick.token.0.market_cap.unwrap_or_default();
+        let current_market_cap = pick.token.market_cap.unwrap_or_default();
         let current_multiplier =
             calculate_price_multiplier(&pick.market_cap_at_call, &current_market_cap)
                 .round_dp(2)
@@ -137,12 +138,12 @@ impl From<TokenPick> for TokenPickResponse {
                 .unwrap_or_default();
 
         Self {
-            token: pick.token.0,
+            token: pick.token,
             highest_mult_post_call,
             call_date: pick.call_date,
             group_id: pick.group_id,
             id: pick.id,
-            user: pick.user.0.into(),
+            user: pick.user.into(),
             highest_mc_post_call: pick.highest_market_cap.map(|mc| mc.round_dp(2)),
             hit_date: pick.hit_date,
             market_cap_at_call: pick.market_cap_at_call.round_dp(2),
@@ -193,4 +194,11 @@ pub struct ProfilePicksAndStatsQuery {
     pub multiplier: Option<u8>,
     pub picked_after: Option<TimePeriod>,
     pub group_ids: Option<Vec<i64>>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct TokenPicksGroup {
+    pub address: String,
+    #[sqlx(json)]
+    pub picks: Vec<TokenPick>,
 }

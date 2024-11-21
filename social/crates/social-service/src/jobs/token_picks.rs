@@ -11,8 +11,10 @@ use tracing::{debug, info, instrument, Span};
 use crate::{
     container::ServiceContainer,
     external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
-    models::{token_picks::TokenPickResponse, tokens::Token},
-    repositories::token_repository::TokenPickRow,
+    models::{
+        token_picks::{TokenPick, TokenPickResponse},
+        tokens::Token,
+    },
     utils::{api_errors::ApiError, redis_keys::RedisKeys},
 };
 
@@ -90,7 +92,7 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
 async fn process_address_batch(
     app_state: &Arc<ServiceContainer>,
     address_batch: &[String],
-    tokens: &HashMap<String, Vec<TokenPickRow>>,
+    tokens: &HashMap<String, Vec<TokenPick>>,
 ) -> Result<(), ApiError> {
     let start = Instant::now();
 
@@ -144,7 +146,7 @@ async fn process_address_batch(
 
 async fn process_token_picks(
     app_state: &Arc<ServiceContainer>,
-    picks: &Vec<TokenPickRow>,
+    picks: &Vec<TokenPick>,
     metadata: LatestTokenMetadataResponse,
 ) -> Result<Vec<TokenPickResponse>, ApiError> {
     let mut picks = picks.clone();
