@@ -11,7 +11,7 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    apis::api_models::query::{GroupMembersQuery, ListGroupMembersQuery},
+    apis::api_models::query::{default_limit, GroupMembersQuery, ListGroupMembersQuery},
     models::{
         groups::{CreateOrUpdateGroup, GroupUser},
         token_picks::TokenPickResponse,
@@ -322,11 +322,13 @@ pub(super) async fn leaderboard(
     Ok((StatusCode::OK, Json(LeaderboardGroupResponse(groups))))
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, Clone)]
 pub struct GroupLeaderboardQuery {
     #[param(default = 10)]
+    #[serde(default = "default_limit")]
     pub limit: i64,
     #[param(default = false)]
+    #[serde(default)]
     pub force_refresh: bool,
     #[param(default = "24h")]
     pub timeframe: String,

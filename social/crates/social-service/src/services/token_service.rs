@@ -1,8 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use chrono::Utc;
 use futures::future::join_all;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
@@ -313,7 +316,10 @@ impl TokenService {
         pick_row: &mut TokenPickRow,
         metadata: &LatestTokenMetadataResponse,
     ) -> Result<(TokenPickResponse, bool), ApiError> {
-        // Early return if token doesn't meet qualification criteria
+        info!(
+            "Processing single pick with metadata for token pick {}",
+            pick_row.id
+        );
         if !TokenPick::is_qualified(
             metadata.market_cap,
             metadata.metadata.liquidity,
@@ -325,17 +331,14 @@ impl TokenService {
         let current_market_cap = metadata.price * metadata.token_info.supply;
         let mut has_update = false;
 
-        // Initialize highest market cap if not set
         if pick_row.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
             has_update = self
                 .initialize_highest_market_cap(pick_row, metadata)
                 .await?;
         }
 
-        // Update highest market cap if current is higher (with sanity check)
         has_update |= self.update_highest_market_cap(pick_row, current_market_cap);
 
-        // Calculate multipliers and update hit date
         pick_row.highest_multiplier = Some(
             calculate_price_multiplier(
                 &pick_row.market_cap_at_call,
@@ -349,7 +352,6 @@ impl TokenService {
             has_update = true;
         }
 
-        // Create response with current metrics
         let mut pick_response = TokenPickResponse::from(pick_row.clone());
         pick_response.current_market_cap = current_market_cap.round_dp(2);
         pick_response.current_multiplier =
@@ -624,92 +626,74 @@ impl TokenService {
             }
         }
 
-        // Get from database if not in cache
+        // Get and process data from database
         let mut picks = self
             .token_repository
             .get_group_leaderboard(group_id, query.limit)
             .await?;
+        if picks.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        // Process picks and update Redis
-        let picks_grouped_by_address: HashMap<String, Vec<&TokenPickRow>> = picks
-            .par_iter()
-            .fold_with(
-                HashMap::<String, Vec<&TokenPickRow>>::with_capacity(picks.len()),
-                |mut acc, pick| {
-                    acc.entry(pick.token_address.clone())
-                        .or_default()
-                        .push(pick);
-                    acc
-                },
-            )
-            .reduce(
-                || HashMap::with_capacity(picks.len()),
-                |mut acc1, acc2| {
-                    for (key, value) in acc2 {
-                        acc1.entry(key).or_default().extend(value);
-                    }
-                    acc1
-                },
-            );
+        dbg!(&picks.len());
+        let addresses: Vec<String> = picks
+            .iter()
+            .map(|pick| pick.token_address.clone())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
 
-        let addresses = Vec::from_iter(picks_grouped_by_address.keys().cloned());
         let metadata = self
             .rust_monorepo_service
             .get_latest_w_metadata(&addresses)
             .await?;
 
-        let mut pipe = redis::pipe();
-        pipe.atomic();
+        let responses: Vec<TokenPickResponse> = picks
+            .par_iter_mut()
+            .filter_map(|pick| {
+                metadata
+                    .get(&pick.token_address)
+                    .and_then(|token_metadata| {
+                        futures::executor::block_on(
+                            self.process_single_pick_with_metadata(pick, token_metadata),
+                        )
+                        .ok()
+                        .map(|(response, _)| response)
+                    })
+            })
+            .collect();
 
-        let processing_futures = picks.iter_mut().map(|pick| {
-            let metadata = metadata.get(&pick.token_address).cloned();
-            let zset_key = zset_key.clone();
-            let hash_key = hash_key.clone();
-            let token_service = self;
+        if !responses.is_empty() {
+            let query_clone = query.clone();
+            let responses_clone = responses.clone();
+            let redis_service = self.redis_service.clone();
+            tokio::spawn(async move {
+                let mut pipe = redis::pipe();
+                pipe.atomic();
 
-            async move {
-                if let Some(token_metadata) = metadata {
-                    let (response, _) = token_service
-                        .process_single_pick_with_metadata(pick, &token_metadata)
-                        .await?;
-
-                    Ok::<(String, String, f32, TokenPickResponse), ApiError>((
-                        zset_key,
-                        hash_key,
+                for response in &responses_clone {
+                    pipe.zadd(
+                        &zset_key,
+                        response.id.to_string(),
                         response.highest_mult_post_call,
-                        response,
-                    ))
-                } else {
-                    Err(ApiError::InternalError("Missing metadata".to_string()))
-                }
-            }
-        });
+                    );
 
-        let results = futures::future::join_all(processing_futures).await;
-        let mut responses = Vec::with_capacity(picks.len());
-
-        for result in results {
-            if let Ok((zset_key, hash_key, score, response)) = result {
-                pipe.zadd(&zset_key, response.id.to_string(), score);
-
-                if let Ok(json_data) = serde_json::to_string(&response) {
-                    pipe.hset(&hash_key, response.id.to_string(), json_data);
+                    if let Ok(json_data) = serde_json::to_string(&response) {
+                        pipe.hset(&hash_key, response.id.to_string(), json_data);
+                    }
                 }
 
-                responses.push(response);
-            }
-        }
+                let ttl = RedisKeys::get_ttl_for_timeframe(&query_clone.timeframe);
+                pipe.expire(&zset_key, ttl);
+                pipe.expire(&hash_key, ttl);
 
-        let ttl = RedisKeys::get_ttl_for_timeframe(&query.timeframe);
-
-        pipe.expire(&zset_key, ttl);
-        pipe.expire(&hash_key, ttl);
-
-        if let Ok(()) = self.redis_service.execute_pipe(pipe).await {
-            debug!(
-                "Successfully cached group leaderboard for group {} with timeframe {}",
-                group_id, query.timeframe
-            );
+                if let Ok(()) = redis_service.execute_pipe(pipe).await {
+                    debug!(
+                        "Successfully cached group leaderboard for group {} with timeframe {}",
+                        group_id, query_clone.timeframe
+                    );
+                }
+            });
         }
 
         Ok(responses)
