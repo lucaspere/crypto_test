@@ -585,6 +585,29 @@ impl TokenRepository {
 
         Ok(())
     }
+
+    pub async fn get_group_leaderboard(
+        &self,
+        group_id: i64,
+        limit: i64,
+    ) -> Result<Vec<TokenPickRow>, sqlx::Error> {
+        let query = format!(
+            r#"
+            SELECT tp.*
+            FROM social.token_picks tp
+            JOIN social.tokens t ON tp.token_address = t.address
+            WHERE tp.group_id = $1
+            ORDER BY tp.highest_multiplier DESC
+            LIMIT $2
+        "#,
+        );
+
+        sqlx::query_as::<_, TokenPickRow>(&query)
+            .bind(group_id)
+            .bind(limit)
+            .fetch_all(self.db.as_ref())
+            .await
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -599,7 +622,7 @@ pub struct TokenPickRow {
     pub group_id: i64,
     pub token_address: String,
     pub telegram_message_id: Option<i64>,
-    pub telegram_user_id: Option<i64>,
+    pub telegram_id: Option<i64>,
     pub price_at_call: Decimal,
     pub market_cap_at_call: Decimal,
     pub supply_at_call: Option<Decimal>,

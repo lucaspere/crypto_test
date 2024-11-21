@@ -20,12 +20,21 @@ impl RedisKeys {
     pub fn get_token_stats_key(address: &str) -> String {
         format!("{}{}", Self::TOKEN_PICK_STATS_PREFIX, address)
     }
+
+    pub fn get_ttl_for_timeframe(timeframe: &str) -> i64 {
+        match timeframe {
+            Self::LEADERBOARD_24H => 86400,
+            Self::LEADERBOARD_7D => 604800,
+            Self::LEADERBOARD_1Y => 31536000,
+            _ => 3600,
+        }
+    }
 }
 impl RedisKeys {
     // Time-based leaderboard prefixes
-    pub const LEADERBOARD_24H: &'static str = "leaderboard:24h";
-    pub const LEADERBOARD_7D: &'static str = "leaderboard:7d";
-    pub const LEADERBOARD_1Y: &'static str = "leaderboard:1y";
+    pub const LEADERBOARD_24H: &'static str = "24h";
+    pub const LEADERBOARD_7D: &'static str = "7d";
+    pub const LEADERBOARD_1Y: &'static str = "1y";
 
     // Leaderboard metrics
     pub const METRIC_RETURNS: &'static str = ":returns";
@@ -34,5 +43,28 @@ impl RedisKeys {
 
     pub fn get_leaderboard_key(timeframe: &str, metric: &str) -> String {
         format!("{}{}", timeframe, metric)
+    }
+}
+
+impl RedisKeys {
+    // Add group leaderboard keys
+    pub const GROUP_LEADERBOARD_PREFIX: &'static str = "group:leaderboard";
+
+    pub fn get_group_leaderboard_key(group_id: i64, timeframe: &str) -> String {
+        format!(
+            "{}:{}:{}",
+            Self::GROUP_LEADERBOARD_PREFIX,
+            group_id,
+            timeframe
+        )
+    }
+
+    pub fn get_group_leaderboard_data_key(group_id: i64, timeframe: &str) -> String {
+        format!(
+            "{}:{}:{}:data",
+            Self::GROUP_LEADERBOARD_PREFIX,
+            group_id,
+            timeframe
+        )
     }
 }

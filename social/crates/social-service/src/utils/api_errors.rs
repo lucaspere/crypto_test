@@ -31,6 +31,9 @@ pub enum ApiError {
 
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
 }
 
 impl ApiError {
@@ -45,6 +48,7 @@ impl ApiError {
             ApiError::RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::TeloxideError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::NotFound(_) => StatusCode::NOT_FOUND,
         }
     }
 }

@@ -130,6 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_token_picks_call_date ON social.token_picks(call_
 CREATE INDEX IF NOT EXISTS idx_token_picks_highest_multiplier ON social.token_picks(highest_multiplier);
 CREATE INDEX IF NOT EXISTS idx_token_picks_hit_date ON social.token_picks(hit_date);
 
+CREATE INDEX IF NOT EXISTS idx_token_address ON social.tokens(address);
 CREATE INDEX IF NOT EXISTS idx_token_volume_24h ON social.tokens(volume_24h);
 CREATE INDEX IF NOT EXISTS idx_token_liquidity ON social.tokens(liquidity);
 
@@ -162,6 +163,7 @@ DROP INDEX IF EXISTS idx_token_picks_call_date;
 DROP INDEX IF EXISTS idx_token_picks_highest_multiplier;
 DROP INDEX IF EXISTS idx_token_picks_hit_date;
 
+DROP INDEX IF EXISTS idx_token_address;
 DROP INDEX IF EXISTS idx_token_volume_24h;
 DROP INDEX IF EXISTS idx_token_liquidity;
 

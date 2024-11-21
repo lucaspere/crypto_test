@@ -51,6 +51,7 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
         ))
         .routes(routes!(group_handlers::get_group_members))
         .routes(routes!(group_handlers::get_group_picks))
+        .routes(routes!(group_handlers::get_group_leaderboard))
         .routes(routes!(group_handlers::leaderboard));
     let user_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/users", user_router);
 
