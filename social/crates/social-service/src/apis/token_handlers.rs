@@ -85,6 +85,7 @@ pub struct PaginatedTokenPickGroupResponse {
 
 #[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct TokenGroupQuery {
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
     #[param(default = 1)]
     pub page: u32,

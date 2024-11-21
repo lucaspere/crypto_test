@@ -33,6 +33,7 @@ pub struct TokenQuery {
     pub following: Option<bool>,
     #[param(default = false)]
     pub filter_by_group: bool,
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
 }
 
@@ -46,6 +47,7 @@ pub struct ProfileQuery {
 
 #[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct ListGroupsQuery {
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
 }
 
@@ -83,6 +85,7 @@ pub struct ProfileLeaderboardQuery {
     #[serde(default)]
     pub following: bool,
     pub username: Option<String>,
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
     #[serde(default)]
     pub filter_by_group: bool,

@@ -90,6 +90,7 @@ pub(super) async fn get_group(
 
 #[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct ListGroupsQuery {
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
 }
 
@@ -209,6 +210,7 @@ pub(super) async fn get_group_members(
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AddUserRequest {
+    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
     pub user_id: Option<Uuid>,
     pub telegram_id: Option<i64>,
 }
