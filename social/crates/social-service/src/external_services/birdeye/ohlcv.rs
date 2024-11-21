@@ -17,13 +17,13 @@ pub struct BirdeyeOHLCVQuery {
     pub time_to: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct OHLCVResponse {
     pub success: bool,
-    pub data: BirdeyeOHLCVItems,
+    pub data: Option<BirdeyeOHLCVItems>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct BirdeyeOHLCVItems {
     pub items: Vec<BirdeyeOHLCVItem>,
 }
@@ -76,12 +76,13 @@ impl BirdeyeService {
         let json_str = response.text().await?;
 
         let ohlcv_response: OHLCVResponse = serde_json::from_str(&json_str).map_err(|e| {
-            error!("Error fetching OHLCV: {}", e);
+            error!("Error fetching OHLCV {}: {}", json_str, e);
             ApiError::InternalServerError("Internal server error".to_string())
         })?;
 
         let max_high = ohlcv_response
             .data
+            .unwrap_or_default()
             .items
             .into_iter()
             .max_by_key(|item| item.high)
