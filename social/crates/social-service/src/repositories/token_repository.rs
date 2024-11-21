@@ -29,6 +29,10 @@ pub const QUALIFIED_TOKEN_PICKS_FILTER: &str = r#"
     AND t.volume_24h IS NOT NULL
 "#;
 
+pub const TOKEN_PICKS_FILTER_WITH_NULLS: &str = r#"
+    AND (tp.highest_market_cap IS NOT NULL OR tp.highest_multiplier IS NOT NULL)
+"#;
+
 pub enum UserPickLimitScope {
     User(Uuid, TimePeriod),
 }
@@ -185,6 +189,7 @@ impl TokenRepository {
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
             WHERE 1=1
+            {TOKEN_PICKS_FILTER_WITH_NULLS}
             {QUALIFIED_TOKEN_PICKS_FILTER}
             "#
         );
@@ -281,6 +286,7 @@ impl TokenRepository {
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
             WHERE 1=1
+            {TOKEN_PICKS_FILTER_WITH_NULLS}
             {QUALIFIED_TOKEN_PICKS_FILTER}
             "#
         );
@@ -597,6 +603,8 @@ impl TokenRepository {
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             WHERE tp.group_id = $1
+            {TOKEN_PICKS_FILTER_WITH_NULLS}
+            {QUALIFIED_TOKEN_PICKS_FILTER}
             ORDER BY tp.highest_multiplier DESC
             LIMIT $2
         "#,

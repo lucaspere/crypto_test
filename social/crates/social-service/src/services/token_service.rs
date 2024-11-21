@@ -609,7 +609,6 @@ impl TokenService {
         let zset_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe);
         let hash_key = RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe);
 
-        // Try to get from Redis first
         if let Ok(pick_ids) = self
             .redis_service
             .zrange_by_score(&zset_key, 0, query.limit as isize)
@@ -626,16 +625,16 @@ impl TokenService {
             }
         }
 
-        // Get and process data from database
         let mut picks = self
             .token_repository
             .get_group_leaderboard(group_id, query.limit)
             .await?;
+        info!("Fetched {} picks", picks.len());
         if picks.is_empty() {
             return Ok(Vec::new());
         }
 
-        dbg!(&picks.len());
+        info!("Fetching metadata for {} picks", picks.len());
         let addresses: Vec<String> = picks
             .iter()
             .map(|pick| pick.token_address.clone())
@@ -648,6 +647,10 @@ impl TokenService {
             .get_latest_w_metadata(&addresses)
             .await?;
 
+        info!(
+            "Processing {:?} picks",
+            picks.iter().map(|p| p.id).collect::<Vec<_>>()
+        );
         let responses: Vec<TokenPickResponse> = picks
             .par_iter_mut()
             .filter_map(|pick| {
