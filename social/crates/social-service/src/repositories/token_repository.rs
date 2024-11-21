@@ -547,31 +547,42 @@ impl TokenRepository {
             return Ok(());
         }
 
-        let query = r#"
-            UPDATE social.token_picks
-            SET highest_market_cap = v.highest_mc,
-                hit_date = v.hit_date
-            FROM (
-                SELECT
-                    UNNEST($1::bigint[]) as id,
-                    UNNEST($2::numeric[]) as highest_mc,
-                    UNNEST($3::timestamptz[]) as hit_date
-            ) as v
-            WHERE token_picks.id = v.id
-        "#;
-
-        let (ids, highest_mcs, hit_dates): (Vec<_>, Vec<_>, Vec<_>) = picks
+        let filtered_picks: Vec<_> = picks
             .iter()
             .filter(|p| p.highest_mc_post_call.is_some())
-            .map(|p| (p.id, p.highest_mc_post_call.unwrap(), p.hit_date))
-            .unzip3();
+            .collect();
 
-        sqlx::query(query)
-            .bind(&ids)
-            .bind(&highest_mcs)
-            .bind(&hit_dates)
-            .execute(self.db.as_ref())
-            .await?;
+        if filtered_picks.is_empty() {
+            return Ok(());
+        }
+
+        // Build the VALUES part of the query dynamically
+        let value_placeholders: Vec<String> = (0..filtered_picks.len())
+            .map(|i| format!("(${},${},${})", i * 3 + 1, i * 3 + 2, i * 3 + 3))
+            .collect();
+
+        let query = format!(
+            r#"
+            UPDATE social.token_picks AS t
+            SET highest_market_cap = v.highest_mc,
+                hit_date = v.hit_date
+            FROM (VALUES {}) AS v(highest_mc, hit_date, id)
+            WHERE t.id = v.id
+            "#,
+            value_placeholders.join(",")
+        );
+
+        let mut query_builder = sqlx::query(&query);
+
+        // Bind all values in order
+        for pick in filtered_picks {
+            query_builder = query_builder
+                .bind(pick.highest_mc_post_call.unwrap())
+                .bind(pick.hit_date)
+                .bind(pick.id);
+        }
+
+        query_builder.execute(self.db.as_ref()).await?;
 
         Ok(())
     }
