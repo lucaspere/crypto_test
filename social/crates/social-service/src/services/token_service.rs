@@ -60,8 +60,14 @@ impl TokenService {
 
     fn generate_token_picks_cache_key(&self, params: &ListTokenPicksParams) -> String {
         format!(
-            "token_picks:{}:{}:{}:{}:{}:{}:{}",
+            "token_picks:{}:{}:{}:{}:{}:{}:{}:{}",
             params.user_id.unwrap_or(Uuid::nil()),
+            params.group_ids.as_ref().map_or("none".to_string(), |ids| {
+                ids.iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            }),
             params.page,
             params.limit,
             params.order_by.unwrap_or_default().to_string(),
@@ -69,7 +75,7 @@ impl TokenService {
             params
                 .picked_after
                 .map_or("none".to_string(), |t| t.to_rfc3339()),
-            params.following
+            params.following,
         )
     }
 

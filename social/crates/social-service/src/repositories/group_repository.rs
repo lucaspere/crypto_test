@@ -40,6 +40,7 @@ const GROUP_SELECT_QUERY: &str = r#"
         g.name,
         g.logo_uri,
         g.is_admin,
+        g.is_active,
         g.created_at,
         COALESCE(tp.total_picks, 0) as token_pick_count,
         COALESCE(gu.user_count, 0) as user_count,
@@ -72,11 +73,12 @@ impl GroupRepository {
         name: &str,
         logo_uri: &Option<String>,
         is_admin: &Option<bool>,
+        is_active: &Option<bool>,
     ) -> Result<CreateOrUpdateGroup, sqlx::Error> {
         sqlx::query_as::<_, CreateOrUpdateGroup>(
             r#"
-            INSERT INTO social.groups (id, name, logo_uri, is_admin)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO social.groups (id, name, logo_uri, is_admin, is_active)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (id) DO UPDATE
             SET
                 name = EXCLUDED.name,
@@ -87,14 +89,19 @@ impl GroupRepository {
                 is_admin = CASE
                     WHEN $4 IS NOT NULL THEN $4
                     ELSE social.groups.is_admin
+                END,
+                is_active = CASE
+                    WHEN $5 IS NOT NULL THEN $5
+                    ELSE social.groups.is_active
                 END
-            RETURNING id, name, logo_uri, created_at, is_admin
+            RETURNING id, name, logo_uri, created_at, is_admin, is_active
             "#,
         )
         .bind(id)
         .bind(name)
         .bind(logo_uri)
         .bind(is_admin)
+        .bind(is_active)
         .fetch_one(self.db.as_ref())
         .await
     }
@@ -133,7 +140,8 @@ impl GroupRepository {
             r#"
             INSERT INTO social.group_users (group_id, user_id)
             VALUES ($1, $2)
-            ON CONFLICT (group_id, user_id) DO NOTHING
+            ON CONFLICT (group_id, user_id) DO UPDATE
+            SET group_id = EXCLUDED.group_id
             RETURNING group_id, user_id, joined_at
             "#,
         )

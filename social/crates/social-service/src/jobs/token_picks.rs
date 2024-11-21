@@ -109,7 +109,7 @@ async fn process_address_batch(
 
     let tokens_to_save = address_batch
         .iter()
-        .map(|address| latest_token_info.get(address).unwrap())
+        .filter_map(|address| latest_token_info.get(address))
         .map(|metadata| Token::from(metadata.clone()))
         .collect::<Vec<_>>();
 

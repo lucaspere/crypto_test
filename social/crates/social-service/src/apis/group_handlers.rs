@@ -54,6 +54,7 @@ pub(super) async fn create_or_update_group(
             &payload.name,
             &payload.logo_uri,
             &payload.is_admin,
+            &payload.is_active,
         )
         .await?;
 

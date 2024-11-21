@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::{DateTime, FixedOffset};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rust_decimal::Decimal;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, PgPool};
 use tracing::{error, info};
 use unzip3::Unzip3;
@@ -416,6 +416,8 @@ impl TokenRepository {
 				user_id,
 				group_id,
 				token_address,
+				telegram_message_id,
+				telegram_id,
 				price_at_call,
 				market_cap_at_call,
 				supply_at_call,
@@ -423,13 +425,15 @@ impl TokenRepository {
 				highest_market_cap,
 				hit_date
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			RETURNING id
 		"#;
         let result = sqlx::query_as::<_, From>(query)
             .bind(pick.user.id)
             .bind(pick.group_id)
             .bind(pick.token.address.clone())
+            .bind(pick.telegram_message_id)
+            .bind(pick.telegram_id)
             .bind(pick.price_at_call)
             .bind(pick.market_cap_at_call)
             .bind(pick.supply_at_call)
@@ -585,6 +589,7 @@ pub struct TokenPickRow {
     pub group_id: i64,
     pub token_address: String,
     pub telegram_message_id: Option<i64>,
+    pub telegram_user_id: Option<i64>,
     pub price_at_call: Decimal,
     pub market_cap_at_call: Decimal,
     pub supply_at_call: Option<Decimal>,
