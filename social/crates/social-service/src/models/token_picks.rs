@@ -26,6 +26,7 @@ pub struct TokenPick {
     pub user: Json<User>,
     pub group_id: i64,
     pub telegram_message_id: Option<i64>,
+    pub telegram_id: Option<i64>,
     pub price_at_call: Decimal,
     pub market_cap_at_call: Decimal,
     pub supply_at_call: Option<Decimal>,

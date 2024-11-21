@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS social.groups (
     name character varying(255) NOT NULL,
     logo_uri character varying(255),
     is_admin boolean DEFAULT FALSE,
+    is_active boolean DEFAULT TRUE,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS social.token_picks (
     user_id uuid,
     group_id bigint,
     telegram_message_id bigint,
+    telegram_id bigint,
     price_at_call numeric(28,18) NOT NULL,
     market_cap_at_call numeric(36,18) DEFAULT 0,
     supply_at_call numeric(36,18) DEFAULT 0,
