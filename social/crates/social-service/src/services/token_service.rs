@@ -336,7 +336,7 @@ impl TokenService {
 
         // Check if we need to update the highest market cap
         if current_market_cap > pick_row.highest_market_cap.unwrap_or_default() {
-            debug!(
+            info!(
                 "Updating highest market cap for token pick {}. Old: {}, New: {}",
                 pick_row.id,
                 pick_row.highest_market_cap.unwrap_or_default(),
