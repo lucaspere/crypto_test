@@ -13,7 +13,7 @@ use services::{
     user_service::UserService,
 };
 use settings::Settings;
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::CorsLayer;
 use utils::api_errors::ApiError;
@@ -37,7 +37,11 @@ pub struct AppState {
 }
 
 pub async fn setup_database(database_url: &str) -> Result<Arc<PgPool>, sqlx::Error> {
-    let pool = PgPool::connect(database_url).await?;
+    let pool = PgPoolOptions::new()
+        .max_connections(20)
+        .min_connections(5)
+        .connect(&database_url)
+        .await?;
     Ok(Arc::new(pool))
 }
 

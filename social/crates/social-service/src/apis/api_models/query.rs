@@ -6,12 +6,12 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, ToSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileLeaderboardSort {
-    #[default]
     PickReturns,
     HitRate,
     RealizedProfit,
     TotalPicks,
     MostRecentPick,
+    #[default]
     AverageReturn,
     GreatestHits,
 }

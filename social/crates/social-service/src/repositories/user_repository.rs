@@ -202,14 +202,14 @@ impl UserRepository {
         followed_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let query = r#"
-        SELECT COUNT(*) FROM social.user_follows WHERE follower_id = $1 AND followed_id = $2
+        SELECT EXISTS (SELECT 1 FROM social.user_follows WHERE follower_id = $1 AND followed_id = $2)
         "#;
-        let count = sqlx::query_scalar::<_, i64>(query)
+        let count = sqlx::query_scalar::<_, bool>(query)
             .bind(follower_id)
             .bind(followed_id)
             .fetch_one(self.db.as_ref())
             .await?;
 
-        Ok(count > 0)
+        Ok(count)
     }
 }
