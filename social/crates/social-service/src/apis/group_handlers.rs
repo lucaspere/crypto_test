@@ -82,11 +82,7 @@ pub(super) async fn get_group(
     State(app_state): State<Arc<AppState>>,
     Path(id): Path<i64>,
 ) -> Result<(StatusCode, Json<GroupResponse>), ApiError> {
-    let group = app_state
-        .group_service
-        .get_group(id)
-        .await?
-        .ok_or(ApiError::UserNotFound)?;
+    let group = app_state.group_service.get_group(id).await?;
 
     Ok((StatusCode::OK, GroupResponse::from(group).into()))
 }

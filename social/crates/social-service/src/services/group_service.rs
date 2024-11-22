@@ -49,11 +49,11 @@ impl GroupService {
             .map_err(|e| ApiError::DatabaseError(e))
     }
 
-    pub async fn get_group(&self, id: i64) -> Result<Option<Group>, ApiError> {
+    pub async fn get_group(&self, id: i64) -> Result<Group, ApiError> {
         self.repository
             .get_group(id)
-            .await
-            .map_err(|e| ApiError::DatabaseError(e))
+            .await?
+            .ok_or(ApiError::NotFound("Group not found".to_string()))
     }
 
     pub async fn list_groups(&self, query: &ListGroupsQuery) -> Result<Vec<Group>, ApiError> {
@@ -84,6 +84,8 @@ impl GroupService {
             }
         };
 
+        self.get_group(group_id).await?;
+
         self.repository
             .add_user_to_group(group_id, user_id)
             .await
@@ -95,6 +97,8 @@ impl GroupService {
         group_id: i64,
         user_id: Uuid,
     ) -> Result<GroupUser, ApiError> {
+        self.get_group(group_id).await?;
+
         let group_user = self.repository.get_group_user(group_id, user_id).await?;
 
         if let Some(group_user) = group_user {
