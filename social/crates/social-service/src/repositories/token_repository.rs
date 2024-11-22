@@ -3,10 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::{DateTime, FixedOffset};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::{types::Json, PgPool};
 use tracing::{error, info};
-use unzip3::Unzip3;
 use uuid::Uuid;
 
 use crate::{
@@ -212,7 +211,6 @@ impl TokenRepository {
             if let Some(picked_after) = params.picked_after {
                 where_clauses.push(format!("tp.call_date >= ${bind_idx}"));
                 bind_values.push(QueryValue::Timestamp(picked_after));
-                bind_idx += 1;
             }
         }
 
@@ -300,7 +298,10 @@ impl TokenRepository {
             if let Some(user_id) = params.user_id {
                 base_query += &format!(" AND tp.user_id = ${bind_idx}");
                 bind_values.push(QueryValue::Uuid(user_id));
-                bind_idx += 1;
+            }
+            if let Some(picked_after) = params.picked_after {
+                base_query += &format!(" AND tp.call_date >= ${bind_idx}");
+                bind_values.push(QueryValue::Timestamp(picked_after));
             }
         }
 
@@ -330,7 +331,7 @@ impl TokenRepository {
             count_builder = match value {
                 QueryValue::Uuid(uuid) => count_builder.bind(uuid),
                 QueryValue::Int64Array(arr) => count_builder.bind(arr),
-                _ => count_builder,
+                QueryValue::Timestamp(ts) => count_builder.bind(ts),
             };
         }
         let total: i64 = count_builder.fetch_one(&mut *tx).await?;
@@ -341,7 +342,7 @@ impl TokenRepository {
             query_builder = match value {
                 QueryValue::Uuid(uuid) => query_builder.bind(uuid),
                 QueryValue::Int64Array(arr) => query_builder.bind(arr),
-                _ => query_builder,
+                QueryValue::Timestamp(ts) => query_builder.bind(ts),
             };
         }
 
