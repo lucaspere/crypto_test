@@ -21,7 +21,6 @@ pub fn default_time_period() -> TimePeriod {
 
 #[derive(Deserialize, ToSchema, Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
-#[serde(tag = "type")]
 pub enum TimePeriod {
     SixHours,
     Day,
