@@ -290,6 +290,11 @@ impl TokenRepository {
 
         // Build where clauses with proper parameter binding
         if let Some(params) = params {
+            if let Some(picked_after) = params.picked_after {
+                base_query += &format!(" AND tp.call_date >= ${bind_idx}");
+                bind_values.push(QueryValue::Timestamp(picked_after));
+                bind_idx += 1;
+            }
             if let Some(group_ids) = &params.group_ids {
                 base_query += &format!(" AND tp.group_id = ANY(${bind_idx})");
                 bind_values.push(QueryValue::Int64Array(group_ids.clone()));
@@ -298,10 +303,6 @@ impl TokenRepository {
             if let Some(user_id) = params.user_id {
                 base_query += &format!(" AND tp.user_id = ${bind_idx}");
                 bind_values.push(QueryValue::Uuid(user_id));
-            }
-            if let Some(picked_after) = params.picked_after {
-                base_query += &format!(" AND tp.call_date >= ${bind_idx}");
-                bind_values.push(QueryValue::Timestamp(picked_after));
             }
         }
 
