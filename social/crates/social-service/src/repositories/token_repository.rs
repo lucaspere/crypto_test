@@ -614,6 +614,7 @@ impl TokenRepository {
     pub async fn get_group_leaderboard(
         &self,
         group_id: i64,
+        timeframe: &TimePeriod,
         limit: i64,
     ) -> Result<Vec<TokenPick>, sqlx::Error> {
         let query = format!(
@@ -625,15 +626,17 @@ impl TokenRepository {
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
             WHERE tp.group_id = $1
+            AND tp.call_date >= $2
             {TOKEN_PICKS_FILTER_WITH_NULLS}
             {QUALIFIED_TOKEN_PICKS_FILTER}
             ORDER BY tp.highest_multiplier DESC
-            LIMIT $2
+            LIMIT $3
         "#,
         );
 
         sqlx::query_as::<_, TokenPick>(&query)
             .bind(group_id)
+            .bind(timeframe.get_start_datetime().fixed_offset())
             .bind(limit)
             .fetch_all(self.db.as_ref())
             .await
