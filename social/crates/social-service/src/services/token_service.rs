@@ -427,6 +427,10 @@ impl TokenService {
             highest_market_cap: Some(market_cap_at_call),
             supply_at_call: Some(token_info.token_info.supply),
             market_cap_at_call,
+            telegram_id: Some(pick.telegram_user_id.parse().map_err(|e| {
+                error!("Failed to parse telegram user id: {}", e);
+                ApiError::InternalServerError("Invalid telegram user id".to_string())
+            })?),
             ..Default::default()
         };
 
