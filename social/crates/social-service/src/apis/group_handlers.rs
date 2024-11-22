@@ -16,7 +16,7 @@ use crate::{
         groups::{CreateOrUpdateGroup, GroupUser},
         token_picks::TokenPickResponse,
     },
-    utils::{api_errors::ApiError, ErrorResponse},
+    utils::{api_errors::ApiError, time::TimePeriod, ErrorResponse},
     AppState,
 };
 
@@ -326,15 +326,17 @@ pub(super) async fn leaderboard(
 pub struct GroupLeaderboardQuery {
     #[param(default = 10)]
     #[serde(default = "default_limit")]
+    /// Number of picks to return
     pub limit: i64,
     #[param(default = false)]
     #[serde(default)]
+    /// Force refresh the leaderboard cache
     pub force_refresh: bool,
-    #[param(default = "24h")]
-    pub timeframe: String,
+    #[param(default = "month")]
+    /// Timeframe to get picks for, available options: `six_hours`, `day`, `week`, `month`, `all_time`
+    pub timeframe: TimePeriod,
 }
 
-/// Get the top token picks for a specific group
 #[utoipa::path(
     get,
     tag = GROUP_TAG,

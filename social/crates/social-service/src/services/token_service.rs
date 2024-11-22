@@ -24,9 +24,7 @@ use crate::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Token, TokenPickRequest},
     },
-    repositories::token_repository::{
-        ListTokenPicksParams, TokenRepository, UserPickLimitScope,
-    },
+    repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
     services::user_service::UserService,
     utils::{
         api_errors::ApiError, math::calculate_price_multiplier, redis_keys::RedisKeys,
@@ -605,8 +603,9 @@ impl TokenService {
         group_id: i64,
         query: &GroupLeaderboardQuery,
     ) -> Result<Vec<TokenPickResponse>, ApiError> {
-        let zset_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe);
-        let hash_key = RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe);
+        let zset_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe.to_string());
+        let hash_key =
+            RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe.to_string());
 
         if let Ok(pick_ids) = self
             .redis_service
@@ -626,7 +625,7 @@ impl TokenService {
 
         let mut picks = self
             .token_repository
-            .get_group_leaderboard(group_id, query.limit)
+            .get_group_leaderboard(group_id, &query.timeframe, query.limit)
             .await?;
         info!("Fetched {} picks", picks.len());
         if picks.is_empty() {
@@ -706,7 +705,8 @@ impl TokenService {
         group_id: i64,
         query: &GroupLeaderboardQuery,
     ) -> Result<(), ApiError> {
-        let leaderboard_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe);
+        let leaderboard_key =
+            RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe.to_string());
         self.redis_service.delete_cached(&leaderboard_key).await?;
         Ok(())
     }

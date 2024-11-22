@@ -15,7 +15,7 @@ use crate::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::Token,
     },
-    utils::{api_errors::ApiError, redis_keys::RedisKeys},
+    utils::{api_errors::ApiError, redis_keys::RedisKeys, time::TimePeriod},
 };
 
 const PROCESSING_LOCK_KEY: &str = "token_picks:processing_lock";
@@ -179,9 +179,11 @@ async fn update_pick_stats(
     pick: TokenPickResponse,
 ) -> Result<(), ApiError> {
     let timeframes = [
-        (RedisKeys::LEADERBOARD_24H, chrono::Duration::hours(24)),
-        (RedisKeys::LEADERBOARD_7D, chrono::Duration::days(7)),
-        (RedisKeys::LEADERBOARD_1Y, chrono::Duration::days(365)),
+        (TimePeriod::SixHours, chrono::Duration::hours(6)),
+        (TimePeriod::Day, chrono::Duration::days(1)),
+        (TimePeriod::Week, chrono::Duration::days(7)),
+        (TimePeriod::Month, chrono::Duration::days(30)),
+        (TimePeriod::AllTime, chrono::Duration::days(365)),
     ];
 
     let mut pipe = redis::pipe();
@@ -190,8 +192,10 @@ async fn update_pick_stats(
     // Batch all Redis operations into a single atomic pipeline
     for (timeframe, duration) in timeframes.iter() {
         if pick.call_date > (Utc::now() - *duration) {
-            let zset_key = RedisKeys::get_group_leaderboard_key(pick.group_id, timeframe);
-            let hash_key = RedisKeys::get_group_leaderboard_data_key(pick.group_id, timeframe);
+            let zset_key =
+                RedisKeys::get_group_leaderboard_key(pick.group_id, &timeframe.to_string());
+            let hash_key =
+                RedisKeys::get_group_leaderboard_data_key(pick.group_id, &timeframe.to_string());
 
             pipe.zadd(&zset_key, pick.id.to_string(), pick.highest_mult_post_call);
 
