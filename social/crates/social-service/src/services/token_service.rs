@@ -44,7 +44,7 @@ pub struct TokenService {
 }
 
 impl TokenService {
-    const MAX_PICK_LIMIT: i64 = 4;
+    const MAX_PICK_LIMIT: i64 = 5;
 
     pub fn new(
         token_repository: Arc<TokenRepository>,
