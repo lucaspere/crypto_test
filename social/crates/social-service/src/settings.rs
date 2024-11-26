@@ -1,7 +1,7 @@
 use config::{Config, Environment};
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub environment: Option<String>,
     pub database_url: String,
@@ -14,6 +14,8 @@ pub struct Settings {
     pub pg_listen_channels: Option<String>,
     pub ext_data_services_v1_api_key: Option<String>,
     pub ext_data_services_v1_base_url: Option<String>,
+    pub usergate_url: String,
+    pub usergate_api_key: Option<String>,
 }
 
 pub fn load_settings() -> Result<Settings, config::ConfigError> {
