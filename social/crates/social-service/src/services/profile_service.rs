@@ -225,14 +225,13 @@ impl ProfileService {
             ..Default::default()
         };
 
-        let (mut picks, _) = self.token_service.list_token_picks(paramsx).await?;
+        let (picks, _) = self.token_service.list_token_picks(paramsx).await?;
 
         if picks.is_empty() {
             info!("No picks found for user {}", params.username);
             return Ok((vec![], UserStats::default()));
         }
 
-        picks.par_sort_by(|a, b| b.call_date.cmp(&a.call_date));
         let first_picks: HashMap<String, &TokenPickResponse> = picks
             .par_iter()
             .fold(
