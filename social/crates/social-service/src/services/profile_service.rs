@@ -6,7 +6,7 @@ use rayon::{
     slice::ParallelSliceMut,
 };
 use rust_decimal::{prelude::Zero, Decimal};
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
@@ -21,6 +21,7 @@ use crate::{
     },
     external_services::{
         birdeye::BirdeyeService, cielo::CieloService, rust_monorepo::RustMonorepoService,
+        usergate::UserGateService,
     },
     models::{
         profiles::{ProfileDetailsResponse, ProfilePickSummary},
@@ -45,6 +46,7 @@ pub struct ProfileService {
     redis_service: Arc<RedisService>,
     token_service: Arc<TokenService>,
     cielo_service: Arc<CieloService>,
+    usergate_service: Arc<UserGateService>,
 }
 
 impl ProfileService {
@@ -56,6 +58,7 @@ impl ProfileService {
         redis_service: Arc<RedisService>,
         token_service: Arc<TokenService>,
         cielo_service: Arc<CieloService>,
+        usergate_service: Arc<UserGateService>,
     ) -> Self {
         ProfileService {
             user_repository,
@@ -65,6 +68,7 @@ impl ProfileService {
             redis_service,
             token_service,
             cielo_service,
+            usergate_service,
         }
     }
 
@@ -317,13 +321,23 @@ impl ProfileService {
                 .await?;
             realized_profit = realized_pnl_usd.realized_pnl_usd.round_dp(2);
         }
+        let usergate_stats = self
+            .usergate_service
+            .get_user_trading_stats(&user.id.to_string())
+            .await
+            .map_err(|e| {
+                error!("Error fetching usergate stats: {:?}", e);
+                e
+            })
+            .unwrap_or_default();
+
         let stats = UserStats {
             total_picks,
             hit_rate: hit_rate.round_dp(2),
             pick_returns: total_returns.round_dp(2),
             average_pick_return: average_pick_return.round_dp(2),
             realized_profit,
-            total_volume_traded: Decimal::ZERO, // TODO: Implement
+            total_volume_traded: usergate_stats.trading_volume_usd.round_dp(2),
             hits: total_hits,
             misses: total_picks - total_hits,
             best_pick: best_pick.unwrap_or_default(),

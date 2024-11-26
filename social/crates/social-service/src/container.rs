@@ -7,6 +7,7 @@ use crate::{
     external_services::{
         birdeye::BirdeyeService, cielo::CieloService,
         ext_data_services_v1::token_data::TokenDataService, rust_monorepo::RustMonorepoService,
+        usergate::UserGateService,
     },
     repositories::{
         group_repository::GroupRepository, token_repository::TokenRepository,
@@ -41,6 +42,10 @@ impl ServiceContainer {
         let redis_service = Arc::new(RedisService::new(&settings.redis_url).await?);
         let rust_monorepo_service =
             Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
+        let usergate_service = Arc::new(UserGateService::new(
+            settings.usergate_url.clone(),
+            settings.usergate_api_key.clone(),
+        ));
         let token_data_service =
             if let Some(api_key) = settings.ext_data_services_v1_api_key.clone() {
                 Some(Arc::new(TokenDataService::new(
@@ -77,6 +82,7 @@ impl ServiceContainer {
                 settings.cielo_api_key.clone(),
                 redis_service.clone(),
             )),
+            usergate_service.clone(),
         );
         let profile_group = Arc::new(Some(profile_service.clone()));
         let group_service = Arc::new(GroupService::new(
