@@ -150,9 +150,18 @@ impl TokenRepository {
                     WHEN EXCLUDED.symbol != '' THEN EXCLUDED.symbol
                     ELSE social.tokens.symbol
                 END,
-                market_cap = EXCLUDED.market_cap,
-                volume_24h = EXCLUDED.volume_24h,
-                liquidity = EXCLUDED.liquidity,
+                market_cap = CASE
+                    WHEN EXCLUDED.market_cap IS NOT NULL THEN EXCLUDED.market_cap
+                    ELSE social.tokens.market_cap
+                END,
+                volume_24h = CASE
+                    WHEN EXCLUDED.volume_24h IS NOT NULL THEN EXCLUDED.volume_24h
+                    ELSE social.tokens.volume_24h
+                END,
+                liquidity = CASE
+                    WHEN EXCLUDED.liquidity IS NOT NULL THEN EXCLUDED.liquidity
+                    ELSE social.tokens.liquidity
+                END,
                 logo_uri = EXCLUDED.logo_uri
             "#,
             values = value_indices.join(",")

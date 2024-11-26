@@ -8,7 +8,7 @@ use crate::container::ServiceContainer;
 
 pub async fn start_background_jobs(app_state: Arc<ServiceContainer>) {
     tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(600)); // 10 minutes
+        let mut interval = interval(Duration::from_secs(300)); // 10 minutes
         interval.tick().await; // Add immediate first tick
 
         loop {

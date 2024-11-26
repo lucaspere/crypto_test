@@ -1,4 +1,4 @@
-use redis::{aio::MultiplexedConnection, Client, Pipeline, RedisError};
+use redis::{aio::MultiplexedConnection, Client, RedisError};
 use serde::{de::DeserializeOwned, Serialize};
 
 pub struct RedisService {
@@ -37,7 +37,7 @@ impl RedisService {
     ) -> Result<(), RedisError> {
         let serialized = serde_json::to_string(value)?;
         let mut connection = self.connection.clone();
-        redis::cmd("SET")
+        let _: () = redis::cmd("SET")
             .arg(key)
             .arg(&serialized)
             .arg("EX")
@@ -49,7 +49,7 @@ impl RedisService {
 
     pub async fn delete_cached(&self, key: &str) -> Result<(), RedisError> {
         let mut connection = self.connection.clone();
-        redis::cmd("DEL")
+        let _: () = redis::cmd("DEL")
             .arg(key)
             .query_async(&mut connection)
             .await?;
@@ -64,7 +64,7 @@ impl RedisService {
             .await?;
 
         if !keys.is_empty() {
-            redis::cmd("DEL")
+            let _: () = redis::cmd("DEL")
                 .arg(keys)
                 .query_async(&mut connection)
                 .await?;
@@ -79,7 +79,7 @@ impl RedisService {
         ttl_seconds: u64,
     ) -> Result<bool, RedisError> {
         let mut connection = self.connection.clone();
-        let result: i32 = redis::cmd("SET")
+        let result: Option<String> = redis::cmd("SET")
             .arg(key)
             .arg(value)
             .arg("NX")
@@ -87,13 +87,13 @@ impl RedisService {
             .arg(ttl_seconds)
             .query_async(&mut connection)
             .await?;
-
-        Ok(result == 1)
+        dbg!(&result);
+        Ok(result.is_some())
     }
 
-    pub async fn execute_pipe(&self, pipe: Pipeline) -> Result<(), RedisError> {
+    pub async fn execute_pipe(&self, pipe: redis::Pipeline) -> Result<(), RedisError> {
         let mut connection = self.connection.clone();
-        pipe.query_async(&mut connection).await?;
+        let _: () = pipe.query_async(&mut connection).await?;
         Ok(())
     }
 

@@ -18,74 +18,100 @@ use crate::{
     utils::{api_errors::ApiError, redis_keys::RedisKeys, time::TimePeriod},
 };
 
-const PROCESSING_LOCK_KEY: &str = "token_picks:processing_lock";
 const PROCESSING_LOCK_TTL: u64 = 300; // 5 minutes
-const BATCH_SIZE: i64 = 30;
+const BATCH_SIZE: i64 = 10;
 const DB_SLOW_THRESHOLD_SECS: f64 = 2.0;
 
 #[instrument(skip(app_state), fields(job_id = %uuid::Uuid::new_v4()))]
 pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Result<(), ApiError> {
+    let lock_acquired = app_state
+        .redis_service
+        .set_nx(RedisKeys::PROCESSING_LOCK_KEY, "1", PROCESSING_LOCK_TTL)
+        .await
+        .map_err(|e| ApiError::InternalError(format!("Redis lock error: {}", e)))?;
+
+    if !lock_acquired {
+        info!("Another instance is currently processing token picks");
+        return Ok(());
+    }
+
     let start_time = Instant::now();
     info!("Starting token picks processing");
 
-    let tokens = app_state.token_service.get_all_tokens().await?;
+    let result = async {
+        let tokens = app_state.token_service.get_all_tokens().await?;
 
-    let addresses: Vec<_> = tokens.keys().cloned().collect();
-    info!(token_count = addresses.len(), "Retrieved tokens to process");
+        let addresses: Vec<_> = tokens.keys().cloned().collect();
+        info!(token_count = addresses.len(), "Retrieved tokens to process");
 
-    let semaphore = Arc::new(Semaphore::new(4));
-    let chunks: Vec<_> = addresses
-        .par_chunks(BATCH_SIZE as usize)
-        .map(|c| c.to_vec())
-        .collect();
+        let semaphore = Arc::new(Semaphore::new(4));
+        let chunks: Vec<_> = addresses
+            .par_chunks(BATCH_SIZE as usize)
+            .map(|c| c.to_vec())
+            .collect();
 
-    debug!(chunk_count = chunks.len(), "Created processing chunks");
+        debug!(chunk_count = chunks.len(), "Created processing chunks");
 
-    let futures = chunks.into_iter().enumerate().map(|(idx, address_batch)| {
-        let app_state = Arc::clone(&app_state);
-        let semaphore = Arc::clone(&semaphore);
-        let tokens = tokens.clone();
-        let span = Span::current();
+        let futures = chunks.into_iter().enumerate().map(|(idx, address_batch)| {
+            let app_state = Arc::clone(&app_state);
+            let semaphore = Arc::clone(&semaphore);
+            let tokens = tokens.clone();
+            let span = Span::current();
 
-        async move {
-            let _guard = span.enter();
-            debug!(
-                chunk_idx = idx,
-                size = address_batch.len(),
-                "Processing chunk"
-            );
+            async move {
+                let _guard = span.enter();
+                debug!(
+                    chunk_idx = idx,
+                    size = address_batch.len(),
+                    "Processing chunk"
+                );
 
-            let _permit = semaphore
-                .acquire()
-                .await
-                .map_err(|_| ApiError::InternalError("Failed to acquire semaphore".to_string()))?;
+                let _permit = semaphore.acquire().await.map_err(|_| {
+                    ApiError::InternalError("Failed to acquire semaphore".to_string())
+                })?;
 
-            let chunk_start = Instant::now();
-            let result = process_address_batch(&app_state, &address_batch, &tokens).await;
+                let chunk_start = Instant::now();
+                let result = process_address_batch(&app_state, &address_batch, &tokens).await;
 
-            let duration = chunk_start.elapsed().as_secs_f64();
-            debug!(
-                chunk_idx = idx,
-                duration = duration,
-                "Finished processing chunk"
-            );
+                let duration = chunk_start.elapsed().as_secs_f64();
+                debug!(
+                    chunk_idx = idx,
+                    duration = duration,
+                    "Finished processing chunk"
+                );
 
-            result
-        }
-    });
+                result
+            }
+        });
 
-    futures::stream::iter(futures)
-        .buffer_unordered(4)
-        .collect::<Vec<_>>()
-        .await;
+        futures::stream::iter(futures)
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+
+        Ok(())
+    }
+    .await;
 
     let duration = start_time.elapsed();
     info!(
         duration_secs = duration.as_secs_f64(),
+        success = result.is_ok(),
         "Finished processing token picks"
     );
 
-    Ok(())
+    // Release the lock early on error
+    if result.is_err() {
+        if let Err(e) = app_state
+            .redis_service
+            .delete_cached(RedisKeys::PROCESSING_LOCK_KEY)
+            .await
+        {
+            debug!(error = ?e, "Failed to release processing lock after error");
+        }
+    }
+
+    result
 }
 
 #[instrument(skip(app_state, tokens, address_batch), fields(batch_size = address_batch.len()))]
