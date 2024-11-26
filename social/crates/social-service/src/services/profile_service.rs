@@ -1,8 +1,10 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashMap, collections::HashSet, sync::Arc};
 
-use chrono::Utc;
 use futures::future::join_all;
-use rayon::slice::ParallelSliceMut;
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSliceMut,
+};
 use rust_decimal::{prelude::Zero, Decimal};
 use tracing::info;
 use uuid::Uuid;
@@ -100,8 +102,8 @@ impl ProfileService {
         let response = ProfileDetailsResponse {
             id: user.id,
             username: params.username.clone(),
-            name: params.username.clone(),
-            avatar_url: String::new(),
+            name: Some(params.username.clone()),
+            avatar_url: None,
             pick_summary: ProfilePickSummary::from(stats),
             is_following,
             ..Default::default()
@@ -229,27 +231,34 @@ impl ProfileService {
             info!("No picks found for user {}", params.username);
             return Ok((vec![], UserStats::default()));
         }
-        info!("Found {} picks for user {}", picks.len(), params.username);
+
+        picks.par_sort_by(|a, b| b.call_date.cmp(&a.call_date));
+        let first_picks: HashMap<String, &TokenPickResponse> = picks
+            .par_iter()
+            .fold(
+                || HashMap::new(),
+                |mut acc, pick| {
+                    acc.entry(pick.token.address.clone()).or_insert(pick);
+                    acc
+                },
+            )
+            .reduce(
+                || HashMap::new(),
+                |mut a, b| {
+                    a.extend(b);
+                    a
+                },
+            );
 
         let mut total_returns = Decimal::ZERO;
         let mut best_pick = None::<BestPick>;
         let mut hits_2x = 0;
 
-        for pick in &mut picks {
-            // Check and update 2x hit status
-            let hit_2x = calculate_price_multiplier(
-                &pick.market_cap_at_call,
-                &pick.highest_mc_post_call.unwrap_or_default(),
-            ) >= Decimal::from(2);
-            if hit_2x {
+        for pick in first_picks.values() {
+            if pick.highest_mult_post_call >= 2.0 {
                 hits_2x += 1;
-                if pick.hit_date.is_none() {
-                    info!("Token {} hit 2x", pick.token.symbol);
-                    pick.hit_date = Some(Utc::now().into());
-                }
             }
 
-            // Update best pick and total returns
             let current_return = calculate_price_multiplier(
                 &pick.market_cap_at_call,
                 &pick.highest_mc_post_call.unwrap_or_default(),
@@ -270,8 +279,11 @@ impl ProfileService {
             };
         }
 
-        let total_picks = picks.len() as i32;
-        let total_hits = picks.iter().filter(|p| p.hit_date.is_some()).count() as i32;
+        let total_picks = first_picks.len() as i32;
+        let total_hits = first_picks
+            .values()
+            .filter(|p| p.hit_date.is_some())
+            .count() as i32;
 
         let hit_rate = if total_picks > 0 && hits_2x > 0 {
             Decimal::from(hits_2x * 100) / Decimal::from(total_picks)

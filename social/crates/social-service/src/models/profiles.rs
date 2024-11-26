@@ -61,13 +61,13 @@ pub struct ProfileDetailsResponse {
     /// Bullpen username
     pub username: String,
     /// User's name
-    pub name: String,
+    pub name: Option<String>,
     /// User's avatar URL
-    pub avatar_url: String,
+    pub avatar_url: Option<String>,
     /// User's pick summary
     pub pick_summary: ProfilePickSummary,
     /// User's bio
-    pub bio: String,
+    pub bio: Option<String>,
     /// User's tier
     pub tier: ProfileTier,
     /// Is the user following the authenticated user
