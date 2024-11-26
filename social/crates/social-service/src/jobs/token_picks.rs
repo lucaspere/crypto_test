@@ -18,8 +18,8 @@ use crate::{
     utils::{api_errors::ApiError, redis_keys::RedisKeys, time::TimePeriod},
 };
 
-const PROCESSING_LOCK_TTL: u64 = 300; // 5 minutes
-const BATCH_SIZE: i64 = 10;
+const PROCESSING_LOCK_TTL: u64 = 180; // 3 minutes
+const BATCH_SIZE: i64 = 20;
 const DB_SLOW_THRESHOLD_SECS: f64 = 2.0;
 
 #[instrument(skip(app_state), fields(job_id = %uuid::Uuid::new_v4()))]

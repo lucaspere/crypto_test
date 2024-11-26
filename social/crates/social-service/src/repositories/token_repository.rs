@@ -30,7 +30,7 @@ pub const QUALIFIED_TOKEN_PICKS_FILTER: &str = r#"
 "#;
 
 pub const TOKEN_PICKS_FILTER_WITH_NULLS: &str = r#"
-    AND (tp.highest_market_cap IS NOT NULL OR tp.highest_multiplier IS NOT NULL)
+    AND (COALESCE(tp.highest_market_cap, 0) > 0 OR COALESCE(tp.highest_multiplier, 0) > 0)
 "#;
 
 pub enum UserPickLimitScope {
