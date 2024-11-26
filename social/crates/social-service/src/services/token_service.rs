@@ -4,7 +4,6 @@ use std::{
 };
 
 use chrono::Utc;
-use futures::future::join_all;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::{prelude::One, Decimal};
 use tracing::{debug, error, info};
@@ -119,20 +118,20 @@ impl TokenService {
             following: query.following.unwrap_or(false),
         };
 
-        let cache_key = self.generate_token_picks_cache_key(&params);
+        // let cache_key = self.generate_token_picks_cache_key(&params);
 
-        if let Ok(Some(cached)) = self
-            .redis_service
-            .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
-            .await
-        {
-            debug!("Cache hit for token picks list: {}", cache_key);
-            return Ok(cached);
-        }
+        // if let Ok(Some(cached)) = self
+        //     .redis_service
+        //     .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
+        //     .await
+        // {
+        //     debug!("Cache hit for token picks list: {}", cache_key);
+        //     return Ok(cached);
+        // }
 
-        debug!("Cache miss for token picks list: {}", cache_key);
+        // debug!("Cache miss for token picks list: {}", cache_key);
 
-        let (mut picks, total) = if params.group_ids.is_some() {
+        let (picks, total) = if params.group_ids.is_some() {
             info!("Fetching token picks group");
             self.token_repository
                 .list_token_picks_group(Some(&params))
@@ -145,24 +144,28 @@ impl TokenService {
                 .map_err(ApiError::from)?
         };
 
-        let pick_futures: Vec<_> = picks
-            .iter_mut()
-            .map(|pick| self.process_pick_with_cache(pick))
-            .collect();
-
-        let pick_responses = join_all(pick_futures)
-            .await
+        let pick_responses: Vec<_> = picks
             .into_par_iter()
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|pick| TokenPickResponse::from(pick))
+            .collect();
+        // let pick_futures: Vec<_> = picks
+        //     .iter_mut()
+        //     .map(|pick| self.process_pick_with_cache(pick))
+        //     .collect();
+
+        // let pick_responses = join_all(pick_futures)
+        //     .await
+        //     .into_par_iter()
+        //     .collect::<Result<Vec<_>, _>>()?;
 
         let response = (pick_responses, total);
-        if let Err(e) = self
-            .redis_service
-            .set_cached(&cache_key, &response, 300)
-            .await
-        {
-            error!("Failed to cache token picks list: {}", e);
-        }
+        // if let Err(e) = self
+        //     .redis_service
+        //     .set_cached(&cache_key, &response, 300)
+        //     .await
+        // {
+        //     error!("Failed to cache token picks list: {}", e);
+        // }
 
         Ok(response)
     }
