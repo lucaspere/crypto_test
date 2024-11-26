@@ -30,6 +30,7 @@ pub const QUALIFIED_TOKEN_PICKS_FILTER: &str = r#"
 "#;
 
 pub const TOKEN_PICKS_FILTER_WITH_NULLS: &str = r#"
+    AND COALESCE(tp.market_cap_at_call, 0) > 0
     AND (COALESCE(tp.highest_market_cap, 0) > 0 OR COALESCE(tp.highest_multiplier, 0) > 0)
 "#;
 

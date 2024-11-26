@@ -118,18 +118,18 @@ impl TokenService {
             following: query.following.unwrap_or(false),
         };
 
-        // let cache_key = self.generate_token_picks_cache_key(&params);
+        let cache_key = self.generate_token_picks_cache_key(&params);
 
-        // if let Ok(Some(cached)) = self
-        //     .redis_service
-        //     .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
-        //     .await
-        // {
-        //     debug!("Cache hit for token picks list: {}", cache_key);
-        //     return Ok(cached);
-        // }
+        if let Ok(Some(cached)) = self
+            .redis_service
+            .get_cached::<(Vec<TokenPickResponse>, i64)>(&cache_key)
+            .await
+        {
+            debug!("Cache hit for token picks list: {}", cache_key);
+            return Ok(cached);
+        }
 
-        // debug!("Cache miss for token picks list: {}", cache_key);
+        debug!("Cache miss for token picks list: {}", cache_key);
 
         let (picks, total) = if params.group_ids.is_some() {
             info!("Fetching token picks group");
@@ -159,13 +159,13 @@ impl TokenService {
         //     .collect::<Result<Vec<_>, _>>()?;
 
         let response = (pick_responses, total);
-        // if let Err(e) = self
-        //     .redis_service
-        //     .set_cached(&cache_key, &response, 300)
-        //     .await
-        // {
-        //     error!("Failed to cache token picks list: {}", e);
-        // }
+        if let Err(e) = self
+            .redis_service
+            .set_cached(&cache_key, &response, 120)
+            .await
+        {
+            error!("Failed to cache token picks list: {}", e);
+        }
 
         Ok(response)
     }
