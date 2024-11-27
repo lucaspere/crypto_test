@@ -5,7 +5,10 @@ use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
-use rust_decimal::{prelude::Zero, Decimal};
+use rust_decimal::{
+    prelude::{FromPrimitive, Zero},
+    Decimal,
+};
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -256,10 +259,11 @@ impl ProfileService {
         let mut total_returns = Decimal::ZERO;
         let mut best_pick = None::<BestPick>;
         let mut hits_2x = 0;
-
+        let mut hit_returns = Decimal::ZERO;
         for pick in first_picks.values() {
             if pick.highest_mult_post_call >= 2.0 {
                 hits_2x += 1;
+                hit_returns += Decimal::from_f32(pick.highest_mult_post_call).unwrap_or_default();
             }
 
             let current_return = calculate_price_multiplier(
@@ -331,6 +335,12 @@ impl ProfileService {
             })
             .unwrap_or_default();
 
+        let average_hit_return = if total_hits > 0 {
+            hit_returns / Decimal::from(total_hits)
+        } else {
+            Decimal::ZERO
+        };
+        let total_busts = self.token_repository.count_busts(&user.id).await?;
         let stats = UserStats {
             total_picks,
             hit_rate: hit_rate.round_dp(2),
@@ -341,6 +351,8 @@ impl ProfileService {
             hits: total_hits,
             misses: total_picks - total_hits,
             best_pick: best_pick.unwrap_or_default(),
+            average_hit_return,
+            total_busts,
         };
 
         info!(
