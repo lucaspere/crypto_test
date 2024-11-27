@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     apis::group_handlers::ListGroupsQuery,
-    models::groups::{CreateOrUpdateGroup, Group, GroupUser, GroupWithUsers},
+    models::groups::{CreateOrUpdateGroup, Group, GroupSettings, GroupUser, GroupWithUsers},
     repositories::token_repository::QUALIFIED_TOKEN_PICKS_FILTER,
 };
 
@@ -42,6 +42,7 @@ const GROUP_SELECT_QUERY: &str = r#"
         g.is_admin,
         g.is_active,
         g.created_at,
+        g.settings,
         COALESCE(tp.total_picks, 0) as token_pick_count,
         COALESCE(gu.user_count, 0) as user_count,
         COALESCE(
@@ -74,11 +75,13 @@ impl GroupRepository {
         logo_uri: &Option<String>,
         is_admin: &Option<bool>,
         is_active: &Option<bool>,
+        settings: &GroupSettings,
     ) -> Result<CreateOrUpdateGroup, sqlx::Error> {
+        let settings_json = serde_json::to_value(settings).ok().unwrap_or_default();
         sqlx::query_as::<_, CreateOrUpdateGroup>(
             r#"
-            INSERT INTO social.groups (id, name, logo_uri, is_admin, is_active)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO social.groups (id, name, logo_uri, is_admin, is_active, settings)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE
             SET
                 name = EXCLUDED.name,
@@ -93,8 +96,12 @@ impl GroupRepository {
                 is_active = CASE
                     WHEN $5 IS NOT NULL THEN $5
                     ELSE social.groups.is_active
+                END,
+                settings = CASE
+                    WHEN $6 IS NOT NULL THEN $6
+                    ELSE social.groups.settings
                 END
-            RETURNING id, name, logo_uri, created_at, is_admin, is_active
+            RETURNING id, name, logo_uri, created_at, is_admin, is_active, settings
             "#,
         )
         .bind(id)
@@ -102,6 +109,7 @@ impl GroupRepository {
         .bind(logo_uri)
         .bind(is_admin)
         .bind(is_active)
+        .bind(settings_json)
         .fetch_one(self.db.as_ref())
         .await
     }

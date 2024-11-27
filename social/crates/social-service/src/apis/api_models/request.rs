@@ -2,6 +2,8 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::models::groups::GroupSettings;
+
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateGroupRequest {
@@ -10,6 +12,7 @@ pub struct CreateGroupRequest {
     pub is_admin: Option<bool>,
     pub is_active: Option<bool>,
     pub logo_uri: Option<String>,
+    pub settings: Option<GroupSettings>,
 }
 
 #[derive(Deserialize, ToSchema)]

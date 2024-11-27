@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::models::{
-    groups::Group, profiles::ProfileDetailsResponse, token_picks::TokenPickResponse,
+    groups::{Group, GroupSettings},
+    profiles::ProfileDetailsResponse,
+    token_picks::TokenPickResponse,
     user_stats::UserStats,
 };
 
@@ -47,6 +49,7 @@ pub struct GroupResponse {
     name: String,
     logo_uri: Option<String>,
     created_at: DateTime<Utc>,
+    settings: GroupSettings,
     total_token_pick: i64,
     total_users: i64,
     total_pick_returns: f64,
@@ -68,6 +71,7 @@ impl From<Group> for GroupResponse {
             average_returns: (group.average_returns * 100.0).round() / 100.0,
             hit_rate: (group.hit_rate * 100.0).round() / 100.0,
             realized_profit: 0,
+            settings: group.settings,
         }
     }
 }

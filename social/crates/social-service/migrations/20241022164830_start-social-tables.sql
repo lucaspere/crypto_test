@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS social.groups (
     logo_uri character varying(255),
     is_admin boolean DEFAULT FALSE,
     is_active boolean DEFAULT TRUE,
+    settings jsonb NOT NULL DEFAULT '{"privacy": "public", "twitterMetadata": "enabled"}'::jsonb,
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

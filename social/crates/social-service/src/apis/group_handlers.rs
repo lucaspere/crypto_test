@@ -50,6 +50,7 @@ pub(super) async fn create_or_update_group(
     State(app_state): State<Arc<AppState>>,
     Json(payload): Json<CreateGroupRequest>,
 ) -> Result<(StatusCode, Json<CreateOrUpdateGroup>), ApiError> {
+    let settings = payload.settings.unwrap_or_default();
     let group = app_state
         .group_service
         .create_or_update_group(
@@ -58,6 +59,7 @@ pub(super) async fn create_or_update_group(
             &payload.logo_uri,
             &payload.is_admin,
             &payload.is_active,
+            settings,
         )
         .await?;
 

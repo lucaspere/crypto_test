@@ -8,7 +8,7 @@ use crate::{
         group_handlers::{AddUserRequest, ListGroupsQuery},
         profile_handlers::ProfileQuery,
     },
-    models::groups::{CreateOrUpdateGroup, Group, GroupUser},
+    models::groups::{CreateOrUpdateGroup, Group, GroupSettings, GroupUser},
     repositories::group_repository::GroupRepository,
     utils::{api_errors::ApiError, time::TimePeriod},
 };
@@ -42,9 +42,10 @@ impl GroupService {
         logo_uri: &Option<String>,
         is_admin: &Option<bool>,
         is_active: &Option<bool>,
+        settings: GroupSettings,
     ) -> Result<CreateOrUpdateGroup, ApiError> {
         self.repository
-            .upsert_group(id, name, logo_uri, is_admin, is_active)
+            .upsert_group(id, name, logo_uri, is_admin, is_active, &settings)
             .await
             .map_err(|e| ApiError::DatabaseError(e))
     }
