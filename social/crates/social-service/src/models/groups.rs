@@ -4,7 +4,7 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, FromRow)]
+#[derive(Clone, Debug, FromRow)]
 pub struct Group {
     pub id: i64,
     pub name: String,
@@ -12,6 +12,8 @@ pub struct Group {
     pub logo_uri: Option<String>,
     pub is_admin: Option<bool>,
     pub is_active: Option<bool>,
+    #[sqlx(json)]
+    pub settings: GroupSettings,
     pub token_pick_count: i64,
     pub total_returns: f64,
     pub average_returns: f64,
@@ -27,6 +29,9 @@ pub struct CreateOrUpdateGroup {
     pub logo_uri: Option<String>,
     pub is_admin: Option<bool>,
     pub is_active: Option<bool>,
+    #[sqlx(json)]
+    #[serde(default)]
+    pub settings: GroupSettings,
 }
 
 impl From<Group> for CreateOrUpdateGroup {
@@ -37,6 +42,7 @@ impl From<Group> for CreateOrUpdateGroup {
             logo_uri: group.logo_uri,
             is_admin: group.is_admin,
             is_active: group.is_active,
+            settings: group.settings,
         }
     }
 }
@@ -49,10 +55,35 @@ pub struct GroupWithUsers {
     pub username: String,
 }
 
-#[derive(Debug, sqlx::FromRow, Serialize, ToSchema)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupUser {
     pub group_id: i64,
     pub user_id: Uuid,
     pub joined_at: DateTime<Utc>,
+}
+
+#[derive(Debug, FromRow, Serialize, ToSchema, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupSettings {
+    pub privacy: GroupPrivacy,
+    pub twitter_metadata: TwitterMetadata,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "privacy")]
+pub enum GroupPrivacy {
+    #[default]
+    Public,
+    Anonymous,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "twitterMetadata")]
+pub enum TwitterMetadata {
+    #[default]
+    Enabled,
+    Disabled,
 }
