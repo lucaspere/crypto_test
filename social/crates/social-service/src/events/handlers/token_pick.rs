@@ -113,7 +113,7 @@ impl TokenPickHandler {
 
         let _original_call_link = match (
             token_pick.telegram_message_id,
-            token_pick.group_id.to_string(),
+            token_pick.group.id.to_string(),
         ) {
             (Some(msg_id), chat) => {
                 let formatted_chat_id = if chat.starts_with("-100") {

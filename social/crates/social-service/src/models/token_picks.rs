@@ -4,6 +4,7 @@ use crate::{
 };
 
 use super::{
+    groups::CreateOrUpdateGroup,
     tokens::Token,
     users::{User, UserResponse},
 };
@@ -25,7 +26,8 @@ pub struct TokenPick {
     pub token: Token,
     #[sqlx(json)]
     pub user: User,
-    pub group_id: i64,
+    #[sqlx(json)]
+    pub group: CreateOrUpdateGroup,
     pub telegram_message_id: Option<i64>,
     pub telegram_id: Option<i64>,
     pub price_at_call: Decimal,
@@ -101,7 +103,7 @@ pub struct TokenPickResponse {
     /// The user ID
     pub user: UserResponse,
     /// The group ID
-    pub group_id: i64,
+    pub group: CreateOrUpdateGroup,
     /// The market cap at the time the pick was made
     pub market_cap_at_call: Decimal,
     /// Date the pick was made
@@ -141,7 +143,7 @@ impl From<TokenPick> for TokenPickResponse {
             token: pick.token,
             highest_mult_post_call,
             call_date: pick.call_date,
-            group_id: pick.group_id,
+            group: pick.group,
             id: pick.id,
             user: pick.user.into(),
             highest_mc_post_call: pick.highest_market_cap.map(|mc| mc.round_dp(2)),
@@ -174,7 +176,6 @@ impl From<TokenPickRow> for TokenPickResponse {
         Self {
             highest_mult_post_call,
             call_date: row.call_date,
-            group_id: row.group_id,
             id: row.id,
             highest_mc_post_call: row.highest_market_cap.map(|mc| mc.round_dp(2)),
             hit_date: row.hit_date,
