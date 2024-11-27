@@ -194,7 +194,10 @@ impl TokenRepository {
             r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
-                   row_to_json(u) AS user,
+                   CASE
+                       WHEN g.settings->>'privacy' = 'anonymous' THEN NULL
+                       ELSE row_to_json(u)
+                   END AS user,
                    row_to_json(g) AS group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
@@ -450,7 +453,7 @@ impl TokenRepository {
 			RETURNING id
 		"#;
         let result = sqlx::query_as::<_, From>(query)
-            .bind(pick.user.id)
+            .bind(pick.user.as_ref().map(|u| u.id))
             .bind(pick.group.id)
             .bind(pick.token.address.clone())
             .bind(pick.telegram_message_id)

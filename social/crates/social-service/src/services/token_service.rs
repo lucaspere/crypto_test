@@ -6,6 +6,7 @@ use std::{
 use chrono::Utc;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::{prelude::One, Decimal};
+use sqlx::types::Json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -427,7 +428,7 @@ impl TokenService {
             token: token_info.clone().into(),
             call_date: call_date.unwrap_or(chrono::Utc::now()).into(),
             group,
-            user: user.clone(),
+            user: Some(Json(user.clone())),
             telegram_message_id: Some(pick.telegram_message_id.parse().map_err(|e| {
                 error!("Failed to parse telegram message id: {}", e);
                 ApiError::InternalServerError("Invalid telegram message id".to_string())
