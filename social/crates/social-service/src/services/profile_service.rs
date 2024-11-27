@@ -239,22 +239,13 @@ impl ProfileService {
             return Ok((vec![], UserStats::default()));
         }
 
-        let first_picks: HashMap<String, &TokenPickResponse> = picks
-            .par_iter()
-            .fold(
-                || HashMap::new(),
-                |mut acc, pick| {
-                    acc.entry(pick.token.address.clone()).or_insert(pick);
-                    acc
-                },
-            )
-            .reduce(
-                || HashMap::new(),
-                |mut a, b| {
-                    a.extend(b);
-                    a
-                },
-            );
+        let first_picks = picks.iter().fold(
+            HashMap::<String, &TokenPickResponse>::new(),
+            |mut acc, pick| {
+                acc.entry(pick.token.address.clone()).or_insert(pick);
+                acc
+            },
+        );
 
         let mut total_returns = Decimal::ZERO;
         let mut best_pick = None::<BestPick>;
