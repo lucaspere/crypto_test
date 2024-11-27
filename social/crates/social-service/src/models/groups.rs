@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{types::Json, FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -29,9 +29,8 @@ pub struct CreateOrUpdateGroup {
     pub logo_uri: Option<String>,
     pub is_admin: Option<bool>,
     pub is_active: Option<bool>,
-    #[sqlx(json)]
     #[serde(skip_serializing)]
-    pub settings: GroupSettings,
+    pub settings: Option<Json<GroupSettings>>,
 }
 
 impl From<Group> for CreateOrUpdateGroup {
@@ -42,7 +41,7 @@ impl From<Group> for CreateOrUpdateGroup {
             logo_uri: group.logo_uri,
             is_admin: group.is_admin,
             is_active: group.is_active,
-            settings: group.settings,
+            settings: Some(Json(group.settings)),
         }
     }
 }

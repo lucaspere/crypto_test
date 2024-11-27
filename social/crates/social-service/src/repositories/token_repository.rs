@@ -388,7 +388,6 @@ impl TokenRepository {
             JOIN public.user u ON tp.user_id = u.id
             JOIN social.groups g ON tp.group_id = g.id
             WHERE tp.id = $1
-            {QUALIFIED_TOKEN_PICKS_FILTER}
             "#
         );
 
