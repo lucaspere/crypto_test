@@ -219,9 +219,9 @@ async fn update_pick_stats(
     for (timeframe, duration) in timeframes.iter() {
         if pick.call_date > (Utc::now() - *duration) {
             let zset_key =
-                RedisKeys::get_group_leaderboard_key(pick.group_id, &timeframe.to_string());
+                RedisKeys::get_group_leaderboard_key(pick.group.id, &timeframe.to_string());
             let hash_key =
-                RedisKeys::get_group_leaderboard_data_key(pick.group_id, &timeframe.to_string());
+                RedisKeys::get_group_leaderboard_data_key(pick.group.id, &timeframe.to_string());
 
             pipe.zadd(&zset_key, pick.id.to_string(), pick.highest_mult_post_call);
 

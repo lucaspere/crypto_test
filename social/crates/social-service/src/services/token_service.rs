@@ -390,7 +390,16 @@ impl TokenService {
                 "User reached the maximum number of picks".to_string(),
             ));
         }
-
+        let group = match pick.telegram_chat_id.parse() {
+            Ok(id) => match self.group_service.get_group(id).await {
+                Ok(group) => group.into(),
+                Err(_) => CreateOrUpdateGroup {
+                    id,
+                    ..Default::default()
+                },
+            },
+            Err(_) => CreateOrUpdateGroup::default(),
+        };
         let token_info = self
             .rust_monorepo_service
             .get_latest_w_metadata(&[pick.address.clone()])
@@ -417,10 +426,7 @@ impl TokenService {
         let token_pick = TokenPick {
             token: token_info.clone().into(),
             call_date: call_date.unwrap_or(chrono::Utc::now()).into(),
-            group_id: pick.telegram_chat_id.parse().map_err(|e| {
-                error!("Failed to parse telegram chat id: {}", e);
-                ApiError::InternalServerError("Invalid telegram chat id".to_string())
-            })?,
+            group,
             user: user.clone(),
             telegram_message_id: Some(pick.telegram_message_id.parse().map_err(|e| {
                 error!("Failed to parse telegram message id: {}", e);
@@ -502,7 +508,7 @@ impl TokenService {
             groups.iter().map(|g| (g.id, g)).collect();
         let map_group_id: HashMap<String, Vec<TokenPickResponse>> =
             picks.iter().fold(HashMap::new(), |mut acc, pick| {
-                if let Some(group) = group_hash.get(&pick.group_id) {
+                if let Some(group) = group_hash.get(&pick.group.id) {
                     acc.entry(group.name.clone())
                         .or_default()
                         .push(pick.clone());

@@ -35,7 +35,9 @@ BEGIN
 
 	-- Get group data
 	SELECT jsonb_build_object(
-		'name', g.name
+		'id', g.id,
+		'name', g.name,
+		'logo_uri', g.logo_uri
 	)
 	FROM social.groups g
 	WHERE g.id = NEW.group_id
@@ -49,7 +51,7 @@ BEGIN
             'id', NEW.id,
             'token', token_data,
             'user', user_data,
-            'group_id', NEW.group_id,
+            'group', group_data,
             'telegram_message_id', NEW.telegram_message_id,
             'price_at_call', NEW.price_at_call,
             'market_cap_at_call', NEW.market_cap_at_call,

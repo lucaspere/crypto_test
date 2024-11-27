@@ -194,10 +194,12 @@ impl TokenRepository {
             r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
-                   row_to_json(u) AS user
+                   row_to_json(u) AS user,
+                   row_to_json(g) AS group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
             WHERE 1=1
             {TOKEN_PICKS_FILTER_WITH_NULLS}
             {QUALIFIED_TOKEN_PICKS_FILTER}
@@ -291,10 +293,12 @@ impl TokenRepository {
             r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
-                   row_to_json(u) AS user
+                   row_to_json(u) AS user,
+                   row_to_json(g) AS group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
             WHERE 1=1
             {TOKEN_PICKS_FILTER_WITH_NULLS}
             {QUALIFIED_TOKEN_PICKS_FILTER}
@@ -374,10 +378,12 @@ impl TokenRepository {
             r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
-                   row_to_json(u) AS user
+                   row_to_json(u) AS user,
+                   row_to_json(g) AS group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
             WHERE tp.id = $1
             {QUALIFIED_TOKEN_PICKS_FILTER}
             "#
@@ -445,7 +451,7 @@ impl TokenRepository {
 		"#;
         let result = sqlx::query_as::<_, From>(query)
             .bind(pick.user.id)
-            .bind(pick.group_id)
+            .bind(pick.group.id)
             .bind(pick.token.address.clone())
             .bind(pick.telegram_message_id)
             .bind(pick.telegram_id)
@@ -517,10 +523,12 @@ impl TokenRepository {
         let query = r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
-                   row_to_json(u) AS user
+                   row_to_json(u) AS user,
+                   row_to_json(g) AS group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
             WHERE tp.highest_market_cap IS NULL
                OR tp.hit_date IS NULL
             ORDER BY tp.call_date DESC
@@ -544,6 +552,7 @@ impl TokenRepository {
                            'group_id', tp.group_id,
                            'token', row_to_json(t),
                            'user', row_to_json(u),
+                           'group', row_to_json(g),
                            'telegram_message_id', tp.telegram_message_id,
                            'telegram_id', tp.telegram_id,
                            'price_at_call', tp.price_at_call,
@@ -558,6 +567,7 @@ impl TokenRepository {
             FROM social.tokens t
             JOIN social.token_picks tp ON t.address = tp.token_address
             JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
             GROUP BY t.address
         "#;
 
@@ -631,10 +641,12 @@ impl TokenRepository {
             r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
-                   row_to_json(u) AS user
+                   row_to_json(u) AS user,
+                   row_to_json(g) AS group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
             WHERE tp.group_id = $1
             AND tp.call_date >= $2
             {TOKEN_PICKS_FILTER_WITH_NULLS}
