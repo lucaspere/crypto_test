@@ -9,6 +9,8 @@ pub struct UserStats {
     pub total_picks: i32,
     /// Percentage of the user's picks that have achieved a return of 2x or more since they were made.
     pub hit_rate: Decimal,
+    /// Average hit return.
+    pub average_hit_return: Decimal,
     /// Total return of the user's picks.
     pub pick_returns: Decimal,
     /// Average return of the user's picks.
@@ -23,6 +25,8 @@ pub struct UserStats {
     pub misses: i32,
     /// [BestPick] performing pick.
     pub best_pick: BestPick,
+    /// Total busts.
+    pub total_busts: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, ToSchema, Clone)]
