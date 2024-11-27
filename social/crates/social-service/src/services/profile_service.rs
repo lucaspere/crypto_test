@@ -170,12 +170,12 @@ impl ProfileService {
         let unique_users = tokens
             .0
             .iter()
-            .map(|t| t.user.username.clone())
+            .map(|t| t.user.as_ref().map(|u| u.username.clone()))
             .collect::<HashSet<_>>();
         info!("Found {} unique users", unique_users.len());
         let mut profiles = join_all(unique_users.iter().map(|username| {
             let query = ProfileQuery {
-                username: username.clone(),
+                username: username.clone().unwrap_or_default(),
                 picked_after: params.picked_after.clone(),
                 group_ids: params.group_ids.clone(),
             };

@@ -14,7 +14,7 @@ use rust_decimal::{
     Decimal,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{types::Json, FromRow};
 use utoipa::{IntoParams, ToSchema};
 
 pub const HIT_MULTIPLIER: u8 = 2;
@@ -24,8 +24,7 @@ pub struct TokenPick {
     pub id: i64,
     #[sqlx(json)]
     pub token: Token,
-    #[sqlx(json)]
-    pub user: User,
+    pub user: Option<Json<User>>,
     #[sqlx(json)]
     pub group: CreateOrUpdateGroup,
     pub telegram_message_id: Option<i64>,
@@ -101,7 +100,7 @@ pub struct TokenPickResponse {
     /// The token info
     pub token: Token,
     /// The user ID
-    pub user: UserResponse,
+    pub user: Option<UserResponse>,
     /// The group ID
     pub group: CreateOrUpdateGroup,
     /// The market cap at the time the pick was made
@@ -145,7 +144,7 @@ impl From<TokenPick> for TokenPickResponse {
             call_date: pick.call_date,
             group: pick.group,
             id: pick.id,
-            user: pick.user.into(),
+            user: pick.user.map(|u| u.0.into()),
             highest_mc_post_call: pick.highest_market_cap.map(|mc| mc.round_dp(2)),
             hit_date: pick.hit_date,
             market_cap_at_call: pick.market_cap_at_call.round_dp(2),

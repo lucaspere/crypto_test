@@ -27,13 +27,15 @@ impl TokenPickHandler {
         Self { services }
     }
 
-    #[instrument(skip(self, data), fields(user_id = %data.token_pick.user.id))]
+    #[instrument(skip(self, data), fields(user_id = %data.token_pick.id))]
     pub(super) async fn notify_followers(&self, data: &TokenPickEventData) -> Result<(), ApiError> {
-        let followers = self
-            .services
-            .user_service
-            .get_followers(&data.token_pick.user.username)
-            .await?;
+        let username = data
+            .token_pick
+            .user
+            .as_ref()
+            .map(|u| u.username.clone())
+            .unwrap_or_default();
+        let followers = self.services.user_service.get_followers(&username).await?;
 
         info!(
             "Notifying {} followers about token pick {}",
@@ -105,10 +107,15 @@ impl TokenPickHandler {
             .username
             .clone()
             .unwrap_or("BullpenFiBot".to_string());
+        let username = token_pick
+            .user
+            .as_ref()
+            .map(|u| u.username.clone())
+            .unwrap_or_default();
         let bullpen_token_link = format!("https://t.me/{}/app?startapp=tokenChart_", bot_username);
         let bullpen_link = format!(
             "https://t.me/{}/app?startapp=profile_{}",
-            bot_username, token_pick.user.username
+            bot_username, username
         );
 
         let _original_call_link = match (
@@ -204,10 +211,7 @@ impl TokenPickHandler {
         let formatted_market_cap_at_call =
             format_number_with_metric_prefix(token_pick.market_cap_at_call.to_f64().unwrap());
 
-        let header = format_header_line(
-            &format!("🎯 {} just made a pick!", token_pick.user.username),
-            true,
-        );
+        let header = format_header_line(&format!("🎯 {} just made a pick!", username), true);
         // Create common fields and message text
         let common_fields = format!(
             r#"
@@ -241,7 +245,7 @@ impl TokenPickHandler {
         let mint_address_copy = format!(r#"<code>${}</code> — <i>tap to copy</i>"#, address);
         let bullpen_link = format!(
             r#"<b><a href="{}">View {} on Bullpen</a></b>"#,
-            bullpen_link, event_data.token_pick.user.username
+            bullpen_link, username
         );
 
         let message_text = format!(

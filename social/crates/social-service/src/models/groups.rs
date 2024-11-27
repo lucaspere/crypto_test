@@ -30,7 +30,7 @@ pub struct CreateOrUpdateGroup {
     pub is_admin: Option<bool>,
     pub is_active: Option<bool>,
     #[sqlx(json)]
-    #[serde(default)]
+    #[serde(skip_serializing)]
     pub settings: GroupSettings,
 }
 
@@ -72,7 +72,6 @@ pub struct GroupSettings {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[serde(tag = "privacy")]
 pub enum GroupPrivacy {
     #[default]
     Public,
@@ -81,7 +80,6 @@ pub enum GroupPrivacy {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[serde(tag = "twitterMetadata")]
 pub enum TwitterMetadata {
     #[default]
     Enabled,
