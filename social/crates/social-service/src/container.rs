@@ -15,8 +15,8 @@ use crate::{
     },
     services::{
         group_service::GroupService, profile_service::ProfileService, redis_service::RedisService,
-        telegram_service::TeloxideTelegramBotApi, token_service::TokenService,
-        user_service::UserService,
+        s3_service::S3Service, telegram_service::TeloxideTelegramBotApi,
+        token_service::TokenService, user_service::UserService,
     },
     settings::Settings,
 };
@@ -30,6 +30,7 @@ pub struct ServiceContainer {
     pub telegram_service: Arc<TeloxideTelegramBotApi>,
     pub rust_monorepo_service: Arc<RustMonorepoService>,
     pub token_data_service: Option<Arc<TokenDataService>>,
+    pub s3_service: Arc<S3Service>,
 }
 
 impl ServiceContainer {
@@ -46,6 +47,18 @@ impl ServiceContainer {
             settings.usergate_url.clone(),
             settings.usergate_api_key.clone(),
         ));
+        let s3_service = Arc::new(
+            S3Service::new(
+                settings.s3_bucket.clone(),
+                settings.aws_access_key_id.clone(),
+                settings.aws_secret_access_key.clone(),
+                settings
+                    .aws_region
+                    .clone()
+                    .unwrap_or_else(|| "us-east-1".to_string()),
+            )
+            .await?,
+        );
         let token_data_service =
             if let Some(api_key) = settings.ext_data_services_v1_api_key.clone() {
                 Some(Arc::new(TokenDataService::new(
@@ -56,7 +69,13 @@ impl ServiceContainer {
                 None
             };
 
-        let user_service = Arc::new(UserService::new(user_repository.clone()));
+        let bot = Bot::new(settings.telegram_bot_token.clone());
+        let telegram_service = Arc::new(TeloxideTelegramBotApi::new(bot).await?);
+        let user_service = Arc::new(UserService::new(
+            user_repository.clone(),
+            telegram_service.clone(),
+            s3_service.clone(),
+        ));
         let group_service = Arc::new(GroupService::new(
             Arc::new(GroupRepository::new(db.clone())),
             user_service.clone(),
@@ -83,6 +102,7 @@ impl ServiceContainer {
                 redis_service.clone(),
             )),
             usergate_service.clone(),
+            s3_service.clone(),
         );
         let profile_group = Arc::new(Some(profile_service.clone()));
         let group_service = Arc::new(GroupService::new(
@@ -91,8 +111,6 @@ impl ServiceContainer {
             profile_group,
         ));
         let profile_service = Arc::new(profile_service);
-        let bot = Bot::new(settings.telegram_bot_token.clone());
-        let telegram_service = Arc::new(TeloxideTelegramBotApi::new(bot).await?);
 
         Ok(Self {
             user_service,
@@ -103,6 +121,7 @@ impl ServiceContainer {
             telegram_service,
             rust_monorepo_service,
             token_data_service,
+            s3_service,
         })
     }
 }

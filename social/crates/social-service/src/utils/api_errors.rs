@@ -34,6 +34,12 @@ pub enum ApiError {
 
     #[error("Not found: {0}")]
     NotFound(String),
+
+    #[error("Invalid file type")]
+    InvalidFileType,
+
+    #[error("S3 error: {0}")]
+    S3Error(String),
 }
 
 impl ApiError {
@@ -49,6 +55,8 @@ impl ApiError {
             ApiError::TeloxideError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::NotFound(_) => StatusCode::NOT_FOUND,
+            ApiError::InvalidFileType => StatusCode::BAD_REQUEST,
+            ApiError::S3Error(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

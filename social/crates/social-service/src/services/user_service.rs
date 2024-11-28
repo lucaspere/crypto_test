@@ -4,14 +4,27 @@ use crate::utils::api_errors::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use super::s3_service::S3Service;
+use super::telegram_service::TeloxideTelegramBotApi;
+
 #[derive(Clone)]
 pub struct UserService {
     user_repository: Arc<UserRepository>,
+    telegram_service: Arc<TeloxideTelegramBotApi>,
+    s3_service: Arc<S3Service>,
 }
 
 impl UserService {
-    pub fn new(user_repository: Arc<UserRepository>) -> Self {
-        Self { user_repository }
+    pub fn new(
+        user_repository: Arc<UserRepository>,
+        telegram_service: Arc<TeloxideTelegramBotApi>,
+        s3_service: Arc<S3Service>,
+    ) -> Self {
+        Self {
+            user_repository,
+            telegram_service,
+            s3_service,
+        }
     }
 
     pub async fn get_by_telegram_user_id(

@@ -1,10 +1,7 @@
 use std::{collections::HashMap, collections::HashSet, sync::Arc};
 
 use futures::future::join_all;
-use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
-    slice::ParallelSliceMut,
-};
+use rayon::slice::ParallelSliceMut;
 use rust_decimal::{
     prelude::{FromPrimitive, Zero},
     Decimal,
@@ -36,7 +33,7 @@ use crate::{
     utils::api_errors::ApiError,
 };
 
-use super::{redis_service::RedisService, token_service::TokenService};
+use super::{redis_service::RedisService, s3_service::S3Service, token_service::TokenService};
 
 const CACHE_TTL_SECONDS: u64 = 300; // 5
 
@@ -50,6 +47,7 @@ pub struct ProfileService {
     token_service: Arc<TokenService>,
     cielo_service: Arc<CieloService>,
     usergate_service: Arc<UserGateService>,
+    s3_service: Arc<S3Service>,
 }
 
 impl ProfileService {
@@ -62,6 +60,7 @@ impl ProfileService {
         token_service: Arc<TokenService>,
         cielo_service: Arc<CieloService>,
         usergate_service: Arc<UserGateService>,
+        s3_service: Arc<S3Service>,
     ) -> Self {
         ProfileService {
             user_repository,
@@ -72,6 +71,7 @@ impl ProfileService {
             token_service,
             cielo_service,
             usergate_service,
+            s3_service,
         }
     }
 
@@ -106,11 +106,12 @@ impl ProfileService {
             })
             .await?;
 
+        let avatar_url = self.s3_service.get_profile_image_url(&user.telegram_id);
         let response = ProfileDetailsResponse {
             id: user.id,
             username: params.username.clone(),
             name: Some(params.username.clone()),
-            avatar_url: None,
+            avatar_url: Some(avatar_url),
             pick_summary: ProfilePickSummary::from(stats),
             is_following,
             ..Default::default()
