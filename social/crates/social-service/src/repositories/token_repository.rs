@@ -34,6 +34,16 @@ pub const TOKEN_PICKS_FILTER_WITH_NULLS: &str = r#"
     AND (COALESCE(tp.highest_market_cap, 0) > 0 OR COALESCE(tp.highest_multiplier, 0) > 0)
 "#;
 
+const GROUP_JSON_BUILDER: &str = r#"
+json_build_object(
+	'id', g.id,
+	'name', g.name,
+	'logoUri', g.logo_uri,
+	'isAdmin', g.is_admin,
+	'isActive', g.is_active
+)
+"#;
+
 pub enum UserPickLimitScope {
     User(Uuid, TimePeriod),
 }
@@ -297,7 +307,7 @@ impl TokenRepository {
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user,
-                   row_to_json(g) AS group
+                   {GROUP_JSON_BUILDER} as group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
@@ -382,7 +392,7 @@ impl TokenRepository {
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user,
-                   row_to_json(g) AS group
+                   {GROUP_JSON_BUILDER} as group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
@@ -522,11 +532,12 @@ impl TokenRepository {
         &self,
         limit: i64,
     ) -> Result<Vec<TokenPick>, sqlx::Error> {
-        let query = r#"
+        let query = format!(
+            r#"
             SELECT tp.*,
                    row_to_json(t) AS token,
                    row_to_json(u) AS user,
-                   row_to_json(g) AS group
+                   {GROUP_JSON_BUILDER} as group
             FROM social.token_picks tp
             JOIN social.tokens t ON tp.token_address = t.address
             JOIN public.user u ON tp.user_id = u.id
@@ -535,9 +546,10 @@ impl TokenRepository {
                OR tp.hit_date IS NULL
             ORDER BY tp.call_date DESC
             LIMIT $1
-        "#;
+        "#,
+        );
 
-        sqlx::query_as::<_, TokenPick>(query)
+        sqlx::query_as::<_, TokenPick>(&query)
             .bind(limit)
             .fetch_all(self.db.as_ref())
             .await
@@ -546,7 +558,8 @@ impl TokenRepository {
     pub async fn get_all_tokens_with_picks_group_by_group_id(
         &self,
     ) -> Result<HashMap<String, Vec<TokenPick>>, sqlx::Error> {
-        let query = r#"
+        let query = format!(
+            r#"
             SELECT t.address,
                    json_agg(
                        json_build_object(
@@ -554,7 +567,7 @@ impl TokenRepository {
                            'group_id', tp.group_id,
                            'token', row_to_json(t),
                            'user', row_to_json(u),
-                           'group', row_to_json(g),
+                           'group', {GROUP_JSON_BUILDER},
                            'telegram_message_id', tp.telegram_message_id,
                            'telegram_id', tp.telegram_id,
                            'price_at_call', tp.price_at_call,
@@ -571,9 +584,10 @@ impl TokenRepository {
             JOIN public.user u ON tp.user_id = u.id
             JOIN social.groups g ON tp.group_id = g.id
             GROUP BY t.address
-        "#;
+        "#,
+        );
 
-        let groups = sqlx::query_as::<_, TokenPicksGroup>(query)
+        let groups = sqlx::query_as::<_, TokenPicksGroup>(&query)
             .fetch_all(self.db.as_ref())
             .await?;
 
