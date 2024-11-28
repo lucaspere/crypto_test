@@ -50,14 +50,8 @@ impl S3Service {
         &self,
         user_telegram_id: &i64,
         image_data: Bytes,
-        content_type: &str,
+        _content_type: &str,
     ) -> Result<String, ApiError> {
-        // Validate content type
-        match content_type {
-            "image/jpeg" | "image/png" | "image/webp" => (),
-            _ => return Err(ApiError::InvalidFileType),
-        };
-
         let (processed_image, content_type) = self.process_image(image_data).await?;
 
         let key = format!("{}/{}.png", PROFILE_AVATARS_PATH, user_telegram_id);
