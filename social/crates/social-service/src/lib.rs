@@ -9,8 +9,8 @@ use events::{
     types::Channel,
 };
 use services::{
-    group_service::GroupService, profile_service::ProfileService, token_service::TokenService,
-    user_service::UserService,
+    group_service::GroupService, profile_service::ProfileService, s3_service::S3Service,
+    token_service::TokenService, user_service::UserService,
 };
 use settings::Settings;
 use sqlx::postgres::{PgPool, PgPoolOptions};
@@ -34,6 +34,7 @@ pub struct AppState {
     pub profile_service: Arc<ProfileService>,
     pub token_service: Arc<TokenService>,
     pub group_service: Arc<GroupService>,
+    pub s3_service: Arc<S3Service>,
 }
 
 pub async fn setup_database(database_url: &str) -> Result<Arc<PgPool>, sqlx::Error> {
@@ -60,6 +61,7 @@ pub async fn setup_router(
                 profile_service: Arc::clone(&container.profile_service),
                 token_service: Arc::clone(&container.token_service),
                 group_service: Arc::clone(&container.group_service),
+                s3_service: Arc::clone(&container.s3_service),
             })),
         Arc::new(container),
     ))

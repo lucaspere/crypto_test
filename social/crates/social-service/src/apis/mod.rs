@@ -28,7 +28,9 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
             token_handlers::get_token_picks,
             token_handlers::post_token_pick
         ))
-        .routes(routes!(token_handlers::get_token_picks_by_group));
+        .routes(routes!(token_handlers::get_token_picks_by_group))
+        .routes(routes!(token_handlers::migrate_social_token_picks));
+
     let profile_router = OpenApiRouter::new()
         .routes(routes!(profile_handlers::get_profile))
         .routes(routes!(profile_handlers::get_profile_picks_and_stats))
@@ -37,7 +39,8 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let user_router = OpenApiRouter::new()
         .routes(routes!(user_handlers::follow_user))
         .routes(routes!(user_handlers::unfollow_user))
-        .routes(routes!(user_handlers::get_user_followers));
+        .routes(routes!(user_handlers::get_user_followers))
+        .routes(routes!(user_handlers::upload_avatar));
 
     let group_router = OpenApiRouter::new()
         .routes(routes!(group_handlers::list_groups))

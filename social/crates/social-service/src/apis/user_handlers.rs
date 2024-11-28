@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Multipart, Path, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -98,4 +98,54 @@ pub async fn get_user_followers(
     let followers = app_state.user_service.get_followers(&username).await?;
 
     Ok((StatusCode::OK, Json(followers)))
+}
+
+#[utoipa::path(
+    post,
+    tag = TAG,
+    path = "/{telegram_id}/avatar",
+    request_body(content_type = "multipart/form-data", content = Vec<u8>),
+    responses(
+        (status = 200, description = "Avatar uploaded successfully", body = UserResponse),
+        (status = 400, description = "Invalid file type"),
+        (status = 500, description = "Internal server error")
+    ),
+    params((
+        "telegram_id" = i64,
+        Path,
+    ))
+)]
+pub async fn upload_avatar(
+    State(app_state): State<Arc<AppState>>,
+    Path(user_telegram_id): Path<i64>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, ApiError> {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?
+    {
+        let content_type = field
+            .content_type()
+            .ok_or(ApiError::BadRequest("Missing content type".to_string()))?
+            .to_string();
+        let data = field
+            .bytes()
+            .await
+            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+
+        let _avatar_url = app_state
+            .s3_service
+            .upload_profile_image(&user_telegram_id, data, &content_type)
+            .await?;
+
+        let user = app_state
+            .user_service
+            .get_by_telegram_user_id(user_telegram_id)
+            .await?
+            .ok_or(ApiError::UserNotFound)?;
+        return Ok((StatusCode::OK, Json(user)));
+    }
+
+    Err(ApiError::BadRequest("No file provided".to_string()))
 }
