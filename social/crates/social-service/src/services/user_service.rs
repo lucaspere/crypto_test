@@ -89,4 +89,8 @@ impl UserService {
         let users = self.user_repository.list_users().await?;
         Ok(users.into_iter().map(UserResponse::from).collect())
     }
+
+    pub fn get_user_avatar(&self, telegram_id: i64) -> String {
+        self.s3_service.get_profile_image_url(telegram_id)
+    }
 }

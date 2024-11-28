@@ -106,7 +106,7 @@ impl ProfileService {
             })
             .await?;
 
-        let avatar_url = self.s3_service.get_profile_image_url(&user.telegram_id);
+        let avatar_url = self.s3_service.get_profile_image_url(user.telegram_id);
         let response = ProfileDetailsResponse {
             id: user.id,
             username: params.username.clone(),
