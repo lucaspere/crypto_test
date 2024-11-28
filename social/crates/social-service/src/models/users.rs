@@ -21,6 +21,8 @@ pub struct User {
     pub wallet_addresses: Option<Json<Vec<WalletWithChain>>>,
     // pub accepted_insights_risk: Option<DateTime<Utc>>,
     // pub created_at: Option<DateTime<Utc>>,
+    pub image_uri: Option<String>,
+    pub bio: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Clone, Default, Debug)]
