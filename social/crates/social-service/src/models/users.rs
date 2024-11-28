@@ -25,6 +25,20 @@ pub struct User {
     pub bio: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, FromRow, Serialize, Deserialize, Default)]
+pub struct SavedUser {
+    pub id: Uuid,
+    pub username: String,
+    pub telegram_id: i64,
+    pub selected_wallet_id: Option<Uuid>,
+    // pub accepted_tos: Option<DateTime<Utc>>,
+    pub waitlisted: bool,
+    // pub accepted_insights_risk: Option<DateTime<Utc>>,
+    // pub created_at: Option<DateTime<Utc>>,
+    pub image_uri: Option<String>,
+    pub bio: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, ToSchema, Clone, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResponse {

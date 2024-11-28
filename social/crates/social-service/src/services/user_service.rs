@@ -1,7 +1,8 @@
-use crate::models::users::{User, UserResponse};
+use crate::models::users::{SavedUser, User, UserResponse};
 use crate::repositories::user_repository::UserRepository;
 use crate::utils::api_errors::ApiError;
 use std::sync::Arc;
+use tracing::info;
 use uuid::Uuid;
 
 use super::s3_service::S3Service;
@@ -90,7 +91,39 @@ impl UserService {
         Ok(users.into_iter().map(UserResponse::from).collect())
     }
 
-    pub fn get_user_avatar(&self, telegram_id: i64) -> String {
-        self.s3_service.get_profile_image_url(telegram_id)
+    pub async fn upsert_user(
+        &self,
+        telegram_user_id: i64,
+        _telegram_chat_id: Option<i64>,
+    ) -> Result<(Option<SavedUser>, Option<String>), ApiError> {
+        if let Some((mut saved_user, photo_id)) = self
+            .telegram_service
+            .get_user_by_telegram_id(telegram_user_id)
+            .await
+            .ok()
+        {
+            let image_data = if let Some(photo_id) = photo_id {
+                self.telegram_service
+                    .get_user_avatar_by_file_id(&photo_id)
+                    .await?
+            } else {
+                Vec::new()
+            };
+
+            if !image_data.is_empty() {
+                let avatar_url = self
+                    .s3_service
+                    .upload_profile_image(&telegram_user_id, image_data.into(), "image/jpeg")
+                    .await?;
+                info!("Uploaded avatar to {}", avatar_url);
+                saved_user.image_uri = Some(avatar_url);
+            }
+            let user = self.user_repository.save_user(saved_user.clone()).await?;
+            saved_user.id = user.unwrap_or_default().id;
+
+            Ok((Some(saved_user), None))
+        } else {
+            Err(ApiError::UserNotFound)
+        }
     }
 }

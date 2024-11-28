@@ -374,17 +374,31 @@ impl TokenService {
             pick.telegram_user_id, pick.address
         );
 
-        let user = self
+        let telegram_user_id = pick.telegram_user_id.parse().map_err(|e| {
+            error!("Failed to parse telegram user id: {}", e);
+            ApiError::BadRequest("Invalid telegram user id".to_string())
+        })?;
+        let user = match self
             .user_service
-            .get_by_telegram_user_id(pick.telegram_user_id.parse().map_err(|e| {
-                error!("Failed to parse telegram user id: {}", e);
-                ApiError::InternalServerError("Invalid telegram user id".to_string())
-            })?)
+            .get_by_telegram_user_id(telegram_user_id)
             .await?
-            .ok_or_else(|| {
+        {
+            Some(user) => user,
+            None => {
                 tracing::error!("User {} not found", pick.telegram_user_id);
-                ApiError::InternalServerError("User not found".to_string())
-            })?;
+                let user = self
+                    .user_service
+                    .upsert_user(telegram_user_id, None)
+                    .await?
+                    .0
+                    .ok_or(ApiError::UserNotFound)?;
+
+                self.user_service
+                    .get_by_telegram_user_id(user.telegram_id)
+                    .await?
+                    .ok_or(ApiError::UserNotFound)?
+            }
+        };
 
         if self.has_user_reached_action_limit(&user.id).await? {
             return Err(ApiError::InternalServerError(
@@ -444,7 +458,7 @@ impl TokenService {
             ..Default::default()
         };
 
-        debug!("Saving token pick: {:?}", token_pick);
+        info!("Saving token pick: {:?}", token_pick);
         let token_pick = self.token_repository.save_token_pick(token_pick).await?;
 
         info!("Successfully saved token pick with id {}", token_pick.id);

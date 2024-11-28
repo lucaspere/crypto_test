@@ -1,4 +1,4 @@
-use crate::models::users::User;
+use crate::models::users::{SavedUser, User};
 use chrono::Utc;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -211,5 +211,51 @@ impl UserRepository {
             .await?;
 
         Ok(count)
+    }
+
+    pub async fn save_user(&self, user: SavedUser) -> Result<Option<User>, sqlx::Error> {
+        let existing_user = self.find_by_telegram_user_id(user.telegram_id).await?;
+        if let Some(_) = existing_user {
+            sqlx::query(
+                "UPDATE public.user
+                 SET selected_wallet_id = COALESCE($1, selected_wallet_id),
+                     waitlisted = $2,
+                     username = CASE WHEN $3 IS NOT NULL THEN $3 ELSE username END,
+                     image_uri = CASE WHEN $5 IS NOT NULL THEN $5 ELSE image_uri END,
+                     bio = CASE WHEN $6 IS NOT NULL THEN $6 ELSE bio END
+                 WHERE telegram_id = $4",
+            )
+            .bind(user.selected_wallet_id)
+            .bind(user.waitlisted)
+            .bind(&user.username)
+            .bind(user.telegram_id)
+            .bind(&user.image_uri)
+            .bind(&user.bio)
+            .execute(self.db.as_ref())
+            .await?;
+        } else {
+            sqlx::query(
+                "INSERT INTO public.user (id, username, telegram_id, selected_wallet_id, waitlisted, image_uri, bio)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (telegram_id) DO UPDATE SET
+                     selected_wallet_id = EXCLUDED.selected_wallet_id,
+                     waitlisted = EXCLUDED.waitlisted,
+                     username = EXCLUDED.username,
+                     image_uri = EXCLUDED.image_uri,
+                     bio = EXCLUDED.bio",
+            )
+            .bind(user.id)
+            .bind(&user.username)
+            .bind(user.telegram_id)
+            .bind(user.selected_wallet_id)
+            .bind(user.waitlisted)
+            .bind(&user.image_uri)
+            .bind(&user.bio)
+            .execute(self.db.as_ref())
+            .await?;
+        }
+
+        let user = self.find_by_telegram_user_id(user.telegram_id).await?;
+        Ok(user)
     }
 }
