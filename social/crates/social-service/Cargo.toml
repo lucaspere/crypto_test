@@ -30,7 +30,6 @@ teloxide = "0.13.0"
 async-trait = { workspace = true }
 urlencoding = "2.1"
 rayon = "1.10.0"
-unzip3 = "1.0.0"
 aws-config = "1.1.7"
 aws-sdk-s3 = "1.17.0"
 aws-types = "1.1.7"
