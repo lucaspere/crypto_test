@@ -3,6 +3,7 @@ use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client, Config};
 use bytes::Bytes;
 use image::{imageops::FilterType, ImageFormat};
 use std::io::Cursor;
+use tracing::error;
 
 use crate::utils::api_errors::ApiError;
 
@@ -34,7 +35,10 @@ impl S3Service {
     }
 
     async fn process_image(&self, image_data: Bytes) -> Result<(Bytes, &str), ApiError> {
-        let img = image::load_from_memory(&image_data).map_err(|e| ApiError::InvalidFileType)?;
+        let img = image::load_from_memory(&image_data).map_err(|e| {
+            error!("Error loading image: {}", e);
+            ApiError::InvalidFileType
+        })?;
 
         let resized = img.resize(AVATAR_SIZE, AVATAR_SIZE, FilterType::Lanczos3);
 
@@ -96,7 +100,7 @@ impl S3Service {
         Ok(())
     }
 
-    pub fn get_profile_image_url(&self, user_telegram_id: &i64) -> String {
+    pub fn get_profile_image_url(&self, user_telegram_id: i64) -> String {
         format!(
             "https://{}.s3.amazonaws.com/{}/{}.png",
             self.bucket, PROFILE_AVATARS_PATH, user_telegram_id

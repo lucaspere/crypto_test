@@ -28,8 +28,7 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
             token_handlers::get_token_picks,
             token_handlers::post_token_pick
         ))
-        .routes(routes!(token_handlers::get_token_picks_by_group))
-        .routes(routes!(token_handlers::migrate_social_token_picks));
+        .routes(routes!(token_handlers::get_token_picks_by_group));
 
     let profile_router = OpenApiRouter::new()
         .routes(routes!(profile_handlers::get_profile))
