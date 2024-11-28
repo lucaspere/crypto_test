@@ -12,7 +12,7 @@ dotenv = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, features = ["multipart"] }
 axum-extra = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
@@ -31,5 +31,11 @@ async-trait = { workspace = true }
 urlencoding = "2.1"
 rayon = "1.10.0"
 unzip3 = "1.0.0"
+aws-config = "1.1.7"
+aws-sdk-s3 = "1.17.0"
+aws-types = "1.1.7"
+bytes = "1.5.0"
+image = "0.25.5"
 
+tokio-util = { version = "0.7.11", features = ["io"] }
 [dev-dependencies]
