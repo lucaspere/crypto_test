@@ -23,7 +23,6 @@ use crate::{
         groups::CreateOrUpdateGroup,
         token_picks::{TokenPick, TokenPickResponse},
         tokens::{Token, TokenPickRequest},
-        users::UserResponse,
     },
     repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
     services::user_service::UserService,
@@ -148,16 +147,7 @@ impl TokenService {
 
         let pick_responses: Vec<_> = picks
             .into_par_iter()
-            .map(|pick| {
-                let mut token_pick_response = TokenPickResponse::from(pick);
-                if let Some(pick_user) = token_pick_response.user.as_ref() {
-                    let avatar = self.user_service.get_user_avatar(pick_user.telegram_id);
-                    let mut user_response = UserResponse::from(pick_user.clone());
-                    user_response.avatar_url = Some(avatar);
-                    token_pick_response.user = Some(user_response);
-                }
-                token_pick_response
-            })
+            .map(|pick| TokenPickResponse::from(pick))
             .collect();
         // let pick_futures: Vec<_> = picks
         //     .iter_mut()
