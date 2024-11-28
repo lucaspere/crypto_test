@@ -40,6 +40,9 @@ pub enum ApiError {
 
     #[error("S3 error: {0}")]
     S3Error(String),
+
+    #[error("Download error: {0}")]
+    DownloadError(#[from] teloxide::DownloadError),
 }
 
 impl ApiError {
@@ -57,6 +60,7 @@ impl ApiError {
             ApiError::NotFound(_) => StatusCode::NOT_FOUND,
             ApiError::InvalidFileType => StatusCode::BAD_REQUEST,
             ApiError::S3Error(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::DownloadError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
