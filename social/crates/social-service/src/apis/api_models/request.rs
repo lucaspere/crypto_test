@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::models::groups::GroupSettings;
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateGroupRequest {
     pub group_id: i64,

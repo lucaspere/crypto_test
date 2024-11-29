@@ -1,25 +1,34 @@
 use std::sync::Arc;
 
+use bytes::Bytes;
 use uuid::Uuid;
 
 use crate::{
     apis::{
-        api_models::{query::ProfileLeaderboardSort, response::GroupMembersResponse},
+        api_models::{
+            query::ProfileLeaderboardSort, request::CreateGroupRequest,
+            response::GroupMembersResponse,
+        },
         group_handlers::{AddUserRequest, ListGroupsQuery},
         profile_handlers::ProfileQuery,
     },
-    models::groups::{CreateOrUpdateGroup, Group, GroupSettings, GroupUser},
+    models::groups::{CreateOrUpdateGroup, Group, GroupUser},
     repositories::group_repository::GroupRepository,
     utils::{api_errors::ApiError, time::TimePeriod},
 };
 
-use super::{profile_service::ProfileService, user_service::UserService};
+use super::{
+    profile_service::ProfileService, s3_service::S3Service,
+    telegram_service::TeloxideTelegramBotApi, user_service::UserService,
+};
 use futures::future::join_all;
 
 pub struct GroupService {
     repository: Arc<GroupRepository>,
     user_service: Arc<UserService>,
     profile_service: Arc<Option<ProfileService>>,
+    telegram_service: Arc<TeloxideTelegramBotApi>,
+    s3_service: Arc<S3Service>,
 }
 
 impl GroupService {
@@ -27,27 +36,63 @@ impl GroupService {
         repository: Arc<GroupRepository>,
         user_service: Arc<UserService>,
         profile_service: Arc<Option<ProfileService>>,
+        telegram_service: Arc<TeloxideTelegramBotApi>,
+        s3_service: Arc<S3Service>,
     ) -> Self {
         Self {
             repository,
             user_service,
             profile_service,
+            telegram_service,
+            s3_service,
         }
     }
 
     pub async fn create_or_update_group(
         &self,
-        id: i64,
-        name: &str,
-        logo_uri: &Option<String>,
-        is_admin: &Option<bool>,
-        is_active: &Option<bool>,
-        settings: GroupSettings,
+        payload: CreateGroupRequest,
     ) -> Result<CreateOrUpdateGroup, ApiError> {
+        let payload = match payload.logo_uri {
+            Some(_) => payload,
+            None => {
+                let mut payload = payload.clone();
+                let telegram_user = self
+                    .telegram_service
+                    .get_username_image_by_telegram_id(payload.group_id)
+                    .await
+                    .ok();
+                if let Some((username, image, _)) = telegram_user {
+                    if let Some(image) = image {
+                        let logo_uri = self
+                            .s3_service
+                            .upload_profile_image(
+                                &payload.group_id,
+                                Bytes::from(image),
+                                "image/jpeg",
+                            )
+                            .await
+                            .ok();
+                        payload.logo_uri = logo_uri;
+                    }
+                    payload.name = username;
+                    payload
+                } else {
+                    payload
+                }
+            }
+        };
+
         self.repository
-            .upsert_group(id, name, logo_uri, is_admin, is_active, &settings)
+            .upsert_group(
+                payload.group_id,
+                &payload.name,
+                &payload.logo_uri,
+                &payload.is_admin,
+                &payload.is_active,
+                &payload.settings.unwrap_or_default(),
+            )
             .await
-            .map_err(|e| ApiError::DatabaseError(e))
+            .map_err(ApiError::DatabaseError)
     }
 
     pub async fn get_group(&self, id: i64) -> Result<Group, ApiError> {
