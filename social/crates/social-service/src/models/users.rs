@@ -56,9 +56,9 @@ impl From<User> for UserResponse {
             id: user.id,
             username: user.username.clone(),
             telegram_id: user.telegram_id,
-            bio: None,
+            bio: user.bio,
             name: Some(user.username),
-            avatar_url: None,
+            avatar_url: user.image_uri,
         }
     }
 }
