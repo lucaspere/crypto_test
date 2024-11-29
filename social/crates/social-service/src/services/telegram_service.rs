@@ -22,6 +22,7 @@ impl TeloxideTelegramBotApi {
         Ok(Self { bot, bot_info })
     }
 }
+
 impl TeloxideTelegramBotApi {
     pub async fn send_message<'a>(
         &'a self,
@@ -101,5 +102,28 @@ impl TeloxideTelegramBotApi {
         let mut image_data = Vec::new();
         self.bot.download_file(&file.path, &mut image_data).await?;
         Ok(image_data)
+    }
+
+    pub async fn get_username_image_by_telegram_id(
+        &self,
+        telegram_id: i64,
+    ) -> Result<(String, Option<Vec<u8>>, Option<String>), ApiError> {
+        let user = self
+            .bot
+            .get_chat(Recipient::from(UserId(telegram_id as u64)))
+            .await?;
+        let bio = user.bio().map(|bio| bio.to_string());
+        let username = match user.kind {
+            ChatKind::Public(public) => public.title,
+            ChatKind::Private(group) => group.username,
+        }
+        .unwrap_or_default();
+        let photo = user.photo.map(|p| p.small_file_id);
+        let image = if let Some(photo_id) = photo {
+            self.get_user_avatar_by_file_id(&photo_id).await.ok()
+        } else {
+            None
+        };
+        Ok((username, image, bio))
     }
 }

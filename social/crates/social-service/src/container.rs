@@ -80,6 +80,8 @@ impl ServiceContainer {
             Arc::new(GroupRepository::new(db.clone())),
             user_service.clone(),
             Arc::new(None),
+            telegram_service.clone(),
+            s3_service.clone(),
         ));
         let token_service = Arc::new(TokenService::new(
             token_repository.clone(),
@@ -109,6 +111,8 @@ impl ServiceContainer {
             Arc::new(GroupRepository::new(db)),
             user_service.clone(),
             profile_group,
+            telegram_service.clone(),
+            s3_service.clone(),
         ));
         let profile_service = Arc::new(profile_service);
 

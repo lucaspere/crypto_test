@@ -12,7 +12,8 @@ use uuid::Uuid;
 
 use crate::{
     apis::{
-        api_models::query::TokenQuery, group_handlers::GroupLeaderboardQuery,
+        api_models::{query::TokenQuery, request::CreateGroupRequest},
+        group_handlers::{AddUserRequest, GroupLeaderboardQuery},
         token_handlers::TokenGroupQuery,
     },
     external_services::{
@@ -405,6 +406,7 @@ impl TokenService {
                 "User reached the maximum number of picks".to_string(),
             ));
         }
+
         let group = match pick.telegram_chat_id.parse() {
             Ok(id) => match self.group_service.get_group(id).await {
                 Ok(group) => group.into(),
@@ -460,6 +462,22 @@ impl TokenService {
 
         info!("Saving token pick: {:?}", token_pick);
         let token_pick = self.token_repository.save_token_pick(token_pick).await?;
+
+        self.group_service
+            .create_or_update_group(CreateGroupRequest {
+                group_id: pick.telegram_chat_id.parse().unwrap(),
+                ..Default::default()
+            })
+            .await?;
+        self.group_service
+            .add_user_to_group(
+                pick.telegram_chat_id.parse().unwrap(),
+                &AddUserRequest {
+                    user_id: None,
+                    telegram_id: Some(user.telegram_id),
+                },
+            )
+            .await?;
 
         info!("Successfully saved token pick with id {}", token_pick.id);
 
