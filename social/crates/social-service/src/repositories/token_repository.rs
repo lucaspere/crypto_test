@@ -690,10 +690,10 @@ impl TokenRepository {
         FROM social.token_picks tp
 		JOIN social.tokens t ON tp.token_address = t.address
         WHERE tp.user_id = $1
-        AND tp.highest_market_cap < tp.market_cap_at_call * 2
-		AND t.volume_24h < 20000
-		AND t.liquidity < 10000
-		AND t.market_cap < 30000
+        AND (tp.highest_market_cap < tp.market_cap_at_call * 2
+		OR t.volume_24h < 20000
+		OR t.liquidity < 10000
+		OR t.market_cap < 30000)
         "#;
 
         let count = sqlx::query_scalar(&query)
