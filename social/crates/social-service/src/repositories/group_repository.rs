@@ -84,9 +84,12 @@ impl GroupRepository {
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE
             SET
-                name = EXCLUDED.name,
+                name = CASE
+                    WHEN LENGTH($2) > 0 THEN $2
+                    ELSE social.groups.name
+                END,
                 logo_uri = CASE
-                    WHEN $3 IS NOT NULL THEN EXCLUDED.logo_uri
+                    WHEN $3 IS NOT NULL THEN $3
                     ELSE social.groups.logo_uri
                 END,
                 is_admin = CASE
