@@ -35,7 +35,10 @@ pub(super) async fn get_token_picks(
     let limit = query.limit;
     let page = query.page;
 
-    let (picks, total) = app_state.token_service.list_token_picks(query).await?;
+    let (picks, total) = app_state
+        .token_service
+        .list_token_picks(query, Some(false))
+        .await?;
     let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
 
     let response = PaginatedTokenPickResponse {

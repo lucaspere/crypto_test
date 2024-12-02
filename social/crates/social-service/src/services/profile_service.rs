@@ -158,14 +158,17 @@ impl ProfileService {
 
         let tokens = self
             .token_service
-            .list_token_picks(TokenQuery {
-                get_all: Some(true),
-                picked_after: Some(params.picked_after.clone()),
-                group_ids: params.group_ids.clone(),
-                following: params.following.then_some(true),
-                username: params.username.clone(),
-                ..Default::default()
-            })
+            .list_token_picks(
+                TokenQuery {
+                    get_all: Some(true),
+                    picked_after: Some(params.picked_after.clone()),
+                    group_ids: params.group_ids.clone(),
+                    following: params.following.then_some(true),
+                    username: params.username.clone(),
+                    ..Default::default()
+                },
+                None,
+            )
             .await?;
 
         let unique_users = tokens
@@ -233,7 +236,10 @@ impl ProfileService {
             ..Default::default()
         };
 
-        let (picks, _) = self.token_service.list_token_picks(paramsx).await?;
+        let (picks, _) = self
+            .token_service
+            .list_token_picks(paramsx, Some(false))
+            .await?;
 
         if picks.is_empty() {
             info!("No picks found for user {}", params.username);

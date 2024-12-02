@@ -89,6 +89,7 @@ impl TokenService {
     pub async fn list_token_picks(
         &self,
         query: TokenQuery,
+        qualified: Option<bool>,
     ) -> Result<(Vec<TokenPickResponse>, i64), ApiError> {
         debug!("Listing token picks with query: {:?}", query);
         let mut query = query.clone();
@@ -141,7 +142,7 @@ impl TokenService {
                 .map_err(ApiError::from)?
         } else {
             self.token_repository
-                .list_token_picks(Some(&params))
+                .list_token_picks(Some(&params), qualified)
                 .await
                 .map_err(ApiError::from)?
         };
@@ -521,19 +522,22 @@ impl TokenService {
         }
         info!("Fetching token picks for groups: {:?}", groups);
         let (picks, total) = self
-            .list_token_picks(TokenQuery {
-                username: None,
-                page: query.page,
-                limit: query.limit,
-                order_by: query.order_by,
-                order_direction: query.order_direction,
-                get_all: query.get_all,
-                group_ids: Some(groups.iter().map(|g| g.id).collect()),
-                picked_after: None,
-                following: None,
-                filter_by_group: false,
-                user_id: None,
-            })
+            .list_token_picks(
+                TokenQuery {
+                    username: None,
+                    page: query.page,
+                    limit: query.limit,
+                    order_by: query.order_by,
+                    order_direction: query.order_direction,
+                    get_all: query.get_all,
+                    group_ids: Some(groups.iter().map(|g| g.id).collect()),
+                    picked_after: None,
+                    following: None,
+                    filter_by_group: false,
+                    user_id: None,
+                },
+                None,
+            )
             .await
             .map_err(ApiError::from)?;
 

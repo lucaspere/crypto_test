@@ -199,6 +199,7 @@ impl TokenRepository {
     pub async fn list_token_picks(
         &self,
         params: Option<&ListTokenPicksParams>,
+        qualified: Option<bool>,
     ) -> Result<(Vec<TokenPick>, i64), sqlx::Error> {
         let mut base_query = format!(
             r#"
@@ -215,9 +216,12 @@ impl TokenRepository {
             JOIN social.groups g ON tp.group_id = g.id
             WHERE 1=1
             {TOKEN_PICKS_FILTER_WITH_NULLS}
-            {QUALIFIED_TOKEN_PICKS_FILTER}
             "#
         );
+
+        if qualified.unwrap_or(true) {
+            base_query += QUALIFIED_TOKEN_PICKS_FILTER;
+        }
 
         let mut where_clauses = Vec::new();
         let mut bind_values = Vec::new();
