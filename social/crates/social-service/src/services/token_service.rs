@@ -755,9 +755,17 @@ impl TokenService {
         group_id: i64,
         query: &GroupLeaderboardQuery,
     ) -> Result<(), ApiError> {
+        debug!(
+            "Updating group leaderboard cache for group {} with timeframe {}",
+            group_id, query.timeframe
+        );
         let leaderboard_key =
             RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe.to_string());
         self.redis_service.delete_cached(&leaderboard_key).await?;
+        debug!(
+            "Successfully updated group leaderboard cache for group {} with timeframe {}",
+            group_id, query.timeframe
+        );
         Ok(())
     }
 }
