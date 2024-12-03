@@ -11,12 +11,12 @@ use crate::{
         ext_data_services_v1::token_data::types::TokenReportData,
         rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
     },
-    utils::api_errors::ApiError,
+    utils::{api_errors::ApiError, redis_keys::RedisKeys},
 };
 use futures::future::join_all;
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 pub struct TokenPickHandler {
     services: Arc<ServiceContainer>,
@@ -29,6 +29,23 @@ impl TokenPickHandler {
 
     #[instrument(skip(self, data), fields(user_id = %data.token_pick.id))]
     pub(super) async fn notify_followers(&self, data: &TokenPickEventData) -> Result<(), ApiError> {
+        let lock_key = format!(
+            "{}{}",
+            RedisKeys::NOTIFY_FOLLOWERS_LOCK_KEY,
+            data.token_pick.id
+        );
+        let lock_acquired = self
+            .services
+            .redis_service
+            .set_nx(&lock_key, "1", 10)
+            .await
+            .map_err(|e| ApiError::InternalError(format!("Redis lock error: {}", e)))?;
+
+        if !lock_acquired {
+            info!("Another instance is currently processing token picks");
+            return Ok(());
+        }
+
         let username = data
             .token_pick
             .user
@@ -86,6 +103,15 @@ impl TokenPickHandler {
 
         join_all(notification_futures).await;
 
+        if let Err(e) = self
+            .services
+            .redis_service
+            .delete_cached(RedisKeys::NOTIFY_FOLLOWERS_LOCK_KEY)
+            .await
+        {
+            debug!(error = ?e, "Failed to release processing lock after error");
+        }
+
         Ok(())
     }
 
@@ -98,8 +124,8 @@ impl TokenPickHandler {
         let token_pick = &event_data.token_pick;
         let symbol = &token_price_metadata.symbol;
         let address = &token_price_metadata.address;
-		// TODO: uncomment this once we have production and staging bots set up
-		// let bot_username = "ToropenBot".to_string()self
+        // TODO: uncomment this once we have production and staging bots set up
+        // let bot_username = "ToropenBot".to_string()self
         //     .services
         //     .telegram_service
         //     .bot_info
