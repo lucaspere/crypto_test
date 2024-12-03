@@ -135,9 +135,13 @@ pub async fn get_token_picks_by_group(
 }
 
 #[derive(Deserialize, ToSchema, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteTokenPickRequest {
+    /// Telegram message id
     pub telegram_message_id: i64,
+    /// Telegram user id
     pub telegram_user_id: i64,
+    /// Telegram group id
     pub telegram_chat_id: i64,
 }
 
@@ -148,6 +152,7 @@ pub struct DeleteTokenPickRequest {
     request_body(content = DeleteTokenPickRequest, content_type = "application/json"),
     responses(
         (status = 200, description = "Token pick deleted"),
+        (status = 409, description = "Can only delete picks within 1 minute of creation", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     )
 )]
@@ -155,5 +160,6 @@ pub async fn delete_token_pick(
     State(app_state): State<Arc<AppState>>,
     Json(body): Json<DeleteTokenPickRequest>,
 ) -> Result<StatusCode, ApiError> {
+    app_state.token_service.delete_token_pick(body).await?;
     Ok(StatusCode::OK)
 }

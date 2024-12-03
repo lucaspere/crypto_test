@@ -782,9 +782,7 @@ impl TokenService {
 
         let pick_time = token_pick.call_date;
         if Utc::now() - Duration::minutes(1) > pick_time {
-            return Err(ApiError::InternalServerError(
-                "Can only delete picks within 1 minute of creation".to_string(),
-            ));
+            return Err(ApiError::CanOnlyDeletePicksWithin1MinuteOfCreation);
         }
 
         self.token_repository

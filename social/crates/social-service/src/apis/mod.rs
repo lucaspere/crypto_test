@@ -26,7 +26,8 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let token_router = OpenApiRouter::new()
         .routes(routes!(
             token_handlers::get_token_picks,
-            token_handlers::post_token_pick
+            token_handlers::post_token_pick,
+            token_handlers::delete_token_pick
         ))
         .routes(routes!(token_handlers::get_token_picks_by_group));
 
