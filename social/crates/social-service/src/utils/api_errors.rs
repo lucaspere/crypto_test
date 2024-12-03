@@ -43,6 +43,9 @@ pub enum ApiError {
 
     #[error("Download error: {0}")]
     DownloadError(#[from] teloxide::DownloadError),
+
+    #[error("Token pick not found")]
+    TokenPickNotFound,
 }
 
 impl ApiError {
@@ -61,6 +64,7 @@ impl ApiError {
             ApiError::InvalidFileType => StatusCode::BAD_REQUEST,
             ApiError::S3Error(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::DownloadError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::TokenPickNotFound => StatusCode::NOT_FOUND,
         }
     }
 }
