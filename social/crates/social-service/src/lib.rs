@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
 use apis::setup_routes;
-use axum::Router;
+use axum::{
+    http::{request::Parts, HeaderValue},
+    Router,
+};
 use container::ServiceContainer;
 use events::{
     handlers::{token_pick::TokenPickHandler, EventHandler},
@@ -15,7 +18,7 @@ use services::{
 use settings::Settings;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::{collections::HashMap, sync::Arc};
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowHeaders, AllowOrigin, Any, CorsLayer};
 use utils::api_errors::ApiError;
 
 pub mod apis;
@@ -52,17 +55,29 @@ pub async fn setup_router(
     let db = setup_database(&settings.database_url).await?;
     let container = setup_services(db, settings).await?;
     let router = create_routes();
+    let cors = CorsLayer::new()
+        .allow_methods(Any)
+        .allow_headers(AllowHeaders::list(vec![
+            "content-type".parse().unwrap(),
+            "x-telegram-auth".parse().unwrap(),
+            "authorization".parse().unwrap(),
+        ]))
+        .allow_origin(AllowOrigin::predicate(
+            |origin: &HeaderValue, _request_parts: &Parts| {
+                origin.as_bytes().ends_with(b".bullpen.fi")
+            },
+        ))
+        .allow_credentials(false);
 
+    let router = router.layer(cors);
     Ok((
-        router
-            .layer(CorsLayer::permissive())
-            .with_state(Arc::new(AppState {
-                user_service: Arc::clone(&container.user_service),
-                profile_service: Arc::clone(&container.profile_service),
-                token_service: Arc::clone(&container.token_service),
-                group_service: Arc::clone(&container.group_service),
-                s3_service: Arc::clone(&container.s3_service),
-            })),
+        router.with_state(Arc::new(AppState {
+            user_service: Arc::clone(&container.user_service),
+            profile_service: Arc::clone(&container.profile_service),
+            token_service: Arc::clone(&container.token_service),
+            group_service: Arc::clone(&container.group_service),
+            s3_service: Arc::clone(&container.s3_service),
+        })),
         Arc::new(container),
     ))
 }
