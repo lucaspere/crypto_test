@@ -46,6 +46,9 @@ pub enum ApiError {
 
     #[error("Token pick not found")]
     TokenPickNotFound,
+
+    #[error("Can only delete picks within 1 minute of creation")]
+    CanOnlyDeletePicksWithin1MinuteOfCreation,
 }
 
 impl ApiError {
@@ -65,6 +68,7 @@ impl ApiError {
             ApiError::S3Error(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::DownloadError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::TokenPickNotFound => StatusCode::NOT_FOUND,
+            ApiError::CanOnlyDeletePicksWithin1MinuteOfCreation => StatusCode::CONFLICT,
         }
     }
 }
