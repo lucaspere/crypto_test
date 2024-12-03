@@ -42,6 +42,7 @@ impl RedisKeys {
 impl RedisKeys {
     // Add group leaderboard keys
     pub const PROCESSING_LOCK_KEY: &str = "token_picks:processing_lock";
+    pub const NOTIFY_FOLLOWERS_LOCK_KEY: &str = "token_picks:notify_followers_lock:";
     pub const GROUP_LEADERBOARD_PREFIX: &'static str = "group:leaderboard";
 
     pub fn get_group_leaderboard_key(group_id: i64, timeframe: &str) -> String {
