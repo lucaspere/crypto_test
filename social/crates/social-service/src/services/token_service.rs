@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use chrono::Utc;
+use chrono::{Duration, NaiveDateTime, Utc};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
@@ -14,7 +14,7 @@ use crate::{
     apis::{
         api_models::{query::TokenQuery, request::CreateGroupRequest},
         group_handlers::{AddUserRequest, GroupLeaderboardQuery},
-        token_handlers::TokenGroupQuery,
+        token_handlers::{DeleteTokenPickRequest, TokenGroupQuery},
     },
     external_services::{
         birdeye::BirdeyeService,
@@ -766,6 +766,31 @@ impl TokenService {
             "Successfully updated group leaderboard cache for group {} with timeframe {}",
             group_id, query.timeframe
         );
+        Ok(())
+    }
+
+    pub async fn delete_token_pick(&self, body: DeleteTokenPickRequest) -> Result<(), ApiError> {
+        let token_pick = self
+            .token_repository
+            .get_token_pick_by_telegram_data(
+                body.telegram_message_id,
+                body.telegram_user_id,
+                body.telegram_chat_id,
+            )
+            .await?
+            .ok_or(ApiError::TokenPickNotFound)?;
+
+        let pick_time = token_pick.call_date;
+        if Utc::now() - Duration::minutes(1) > pick_time {
+            return Err(ApiError::InternalServerError(
+                "Can only delete picks within 1 minute of creation".to_string(),
+            ));
+        }
+
+        self.token_repository
+            .delete_token_pick(token_pick.id)
+            .await?;
+
         Ok(())
     }
 }

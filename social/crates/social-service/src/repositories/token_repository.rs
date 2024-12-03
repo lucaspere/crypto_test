@@ -703,6 +703,28 @@ impl TokenRepository {
 
         Ok(count)
     }
+
+    pub async fn get_token_pick_by_telegram_data(
+        &self,
+        telegram_message_id: i64,
+        telegram_user_id: i64,
+        telegram_chat_id: i64,
+    ) -> Result<Option<TokenPick>, sqlx::Error> {
+        sqlx::query_as::<_, TokenPick>(r#"SELECT * FROM social.token_picks WHERE telegram_message_id = $1 AND telegram_user_id = $2 AND telegram_chat_id = $3"#)
+			.bind(telegram_message_id)
+			.bind(telegram_user_id)
+			.bind(telegram_chat_id)
+            .fetch_optional(self.db.as_ref())
+            .await
+    }
+
+    pub async fn delete_token_pick(&self, id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query(r#"DELETE FROM social.token_picks WHERE id = $1"#)
+            .bind(id)
+            .execute(self.db.as_ref())
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, sqlx::FromRow, Deserialize, Clone)]

@@ -133,3 +133,27 @@ pub async fn get_token_picks_by_group(
 
     Ok((StatusCode::OK, Json(response)))
 }
+
+#[derive(Deserialize, ToSchema, Debug)]
+pub struct DeleteTokenPickRequest {
+    pub telegram_message_id: i64,
+    pub telegram_user_id: i64,
+    pub telegram_chat_id: i64,
+}
+
+#[utoipa::path(
+    delete,
+    tag = TAG,
+    path = "/",
+    request_body(content = DeleteTokenPickRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Token pick deleted"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
+pub async fn delete_token_pick(
+    State(app_state): State<Arc<AppState>>,
+    Json(body): Json<DeleteTokenPickRequest>,
+) -> Result<StatusCode, ApiError> {
+    Ok(StatusCode::OK)
+}
