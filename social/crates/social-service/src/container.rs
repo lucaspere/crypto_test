@@ -31,6 +31,7 @@ pub struct ServiceContainer {
     pub rust_monorepo_service: Arc<RustMonorepoService>,
     pub token_data_service: Option<Arc<TokenDataService>>,
     pub s3_service: Arc<S3Service>,
+    pub environment: String,
 }
 
 impl ServiceContainer {
@@ -126,6 +127,7 @@ impl ServiceContainer {
             rust_monorepo_service,
             token_data_service,
             s3_service,
+            environment: settings.environment.clone().unwrap_or("prod".to_string()),
         })
     }
 }

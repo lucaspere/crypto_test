@@ -124,17 +124,15 @@ impl TokenPickHandler {
         let token_pick = &event_data.token_pick;
         let symbol = &token_price_metadata.symbol;
         let address = &token_price_metadata.address;
-        // TODO: uncomment this once we have production and staging bots set up
-        // let bot_username = "ToropenBot".to_string()self
-        //     .services
-        //     .telegram_service
-        //     .bot_info
-        //     .as_ref()
-        //     .unwrap()
-        //     .username
-        //     .clone()
-        //     .unwrap_or("BullpenFiBot".to_string());
-        let bot_username = "ToropenBot".to_string();
+        let bot_username = self
+            .services
+            .telegram_service
+            .bot_info
+            .as_ref()
+            .unwrap()
+            .username
+            .clone()
+            .unwrap_or("BullpenFiBot".to_string());
         let username = token_pick
             .user
             .as_ref()

@@ -15,12 +15,36 @@ impl RedisKeys {
     // Cache TTL (24 hours)
     pub const CACHE_TTL: u64 = 86400;
 
+    // Environment prefix
+    pub const PROD_ENV: &'static str = "prod";
+    pub const STAGING_ENV: &'static str = "staging";
+
+    pub fn get_env_prefix() -> &'static str {
+        match std::env::var("ENVIRONMENT")
+            .unwrap_or_else(|_| "prod".to_string())
+            .as_str()
+        {
+            "staging" => Self::STAGING_ENV,
+            _ => Self::PROD_ENV,
+        }
+    }
+
     pub fn get_profile_stats_key(username: &str) -> String {
-        format!("{}{}", Self::PROFILE_STATS_PREFIX, username)
+        format!(
+            "{}:{}{}",
+            Self::get_env_prefix(),
+            Self::PROFILE_STATS_PREFIX,
+            username
+        )
     }
 
     pub fn get_token_stats_key(address: &str) -> String {
-        format!("{}{}", Self::TOKEN_PICK_STATS_PREFIX, address)
+        format!(
+            "{}:{}{}",
+            Self::get_env_prefix(),
+            Self::TOKEN_PICK_STATS_PREFIX,
+            address
+        )
     }
 
     pub fn get_ttl_for_timeframe(timeframe: &TimePeriod) -> i64 {
@@ -35,7 +59,11 @@ impl RedisKeys {
     pub const METRIC_TOTAL_PICKS: &'static str = ":total_picks";
 
     pub fn get_leaderboard_key(timeframe: &str, metric: &str) -> String {
-        format!("{}{}", timeframe, metric)
+        format!(
+            "{}:{}",
+            Self::get_env_prefix(),
+            format!("{}{}", timeframe, metric)
+        )
     }
 }
 
@@ -47,7 +75,8 @@ impl RedisKeys {
 
     pub fn get_group_leaderboard_key(group_id: i64, timeframe: &str) -> String {
         format!(
-            "{}:{}:{}",
+            "{}:{}:{}:{}",
+            Self::get_env_prefix(),
             Self::GROUP_LEADERBOARD_PREFIX,
             group_id,
             timeframe
@@ -56,7 +85,8 @@ impl RedisKeys {
 
     pub fn get_group_leaderboard_data_key(group_id: i64, timeframe: &str) -> String {
         format!(
-            "{}:{}:{}:data",
+            "{}:{}:{}:{}:data",
+            Self::get_env_prefix(),
             Self::GROUP_LEADERBOARD_PREFIX,
             group_id,
             timeframe
