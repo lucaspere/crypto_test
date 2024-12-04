@@ -30,7 +30,7 @@ use crate::{
         user_stats::{BestPick, UserStats},
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
-    utils::api_errors::ApiError,
+    utils::{api_errors::ApiError, redis_keys::RedisKeys},
 };
 
 use super::{redis_service::RedisService, s3_service::S3Service, token_service::TokenService};
@@ -130,7 +130,8 @@ impl ProfileService {
     ) -> Result<LeaderboardResponse, ApiError> {
         info!("Listing profiles with params: {:?}", params);
         let cache_key = format!(
-            "leaderboard:{}:{}{}:{}",
+            "{}:leaderboard:{}:{}{}:{}",
+            RedisKeys::get_env_prefix(),
             params.picked_after.to_string(),
             params
                 .group_ids

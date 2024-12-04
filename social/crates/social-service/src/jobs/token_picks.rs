@@ -24,9 +24,10 @@ const DB_SLOW_THRESHOLD_SECS: f64 = 2.0;
 
 #[instrument(skip(app_state), fields(job_id = %uuid::Uuid::new_v4()))]
 pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Result<(), ApiError> {
+    let processing_lock_key = format!("{}-processing-lock", app_state.environment);
     let lock_acquired = app_state
         .redis_service
-        .set_nx(RedisKeys::PROCESSING_LOCK_KEY, "1", PROCESSING_LOCK_TTL)
+        .set_nx(&processing_lock_key, "1", PROCESSING_LOCK_TTL)
         .await
         .map_err(|e| ApiError::InternalError(format!("Redis lock error: {}", e)))?;
 
@@ -104,7 +105,7 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
     if result.is_err() {
         if let Err(e) = app_state
             .redis_service
-            .delete_cached(RedisKeys::PROCESSING_LOCK_KEY)
+            .delete_cached(&processing_lock_key)
             .await
         {
             debug!(error = ?e, "Failed to release processing lock after error");

@@ -97,7 +97,7 @@ pub async fn setup_services(
 pub fn init_tracing(settings: &settings::Settings) {
     let env = settings.environment.clone().unwrap_or("DEV".to_string());
     let level = match env.as_str() {
-        "PROD" => tracing::Level::INFO,
+        "prod" => tracing::Level::INFO,
         _ => tracing::Level::DEBUG,
     };
 
@@ -108,7 +108,7 @@ pub fn init_tracing(settings: &settings::Settings) {
         .with_file(true)
         .with_line_number(true)
         .with_thread_names(true)
-        .with_ansi(env != "PROD")
+        .with_ansi(env != "prod")
         .init();
 }
 

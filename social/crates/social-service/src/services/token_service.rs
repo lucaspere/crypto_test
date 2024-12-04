@@ -67,7 +67,8 @@ impl TokenService {
 
     fn generate_token_picks_cache_key(&self, params: &ListTokenPicksParams) -> String {
         format!(
-            "token_picks:{}:{}:{}:{}:{}:{}:{}:{}",
+            "{}:token_picks:{}:{}:{}:{}:{}:{}:{}:{}",
+            RedisKeys::get_env_prefix(),
             params.user_id.unwrap_or(Uuid::nil()),
             params.group_ids.as_ref().map_or("none".to_string(), |ids| {
                 ids.iter()
