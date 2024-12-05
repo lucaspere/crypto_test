@@ -19,7 +19,7 @@ use settings::Settings;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::{AllowHeaders, AllowOrigin, Any, CorsLayer};
-use utils::api_errors::ApiError;
+use utils::errors::app_error::AppError;
 
 pub mod apis;
 pub mod container;
@@ -115,7 +115,7 @@ pub fn init_tracing(settings: &settings::Settings) {
 pub async fn start_event_listeners(
     settings: Arc<Settings>,
     services: Arc<ServiceContainer>,
-) -> Result<(), ApiError> {
+) -> Result<(), AppError> {
     let mut handlers = HashMap::new();
     handlers.insert(
         Channel::TokenPick,

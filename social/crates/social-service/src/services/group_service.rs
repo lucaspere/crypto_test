@@ -6,15 +6,15 @@ use uuid::Uuid;
 use crate::{
     apis::{
         api_models::{
-            query::ProfileLeaderboardSort, request::CreateGroupRequest,
+            query::{ListGroupsQuery, ProfileLeaderboardSort},
+            request::{AddUserRequest, CreateGroupRequest},
             response::GroupMembersResponse,
         },
-        group_handlers::{AddUserRequest, ListGroupsQuery},
         profile_handlers::ProfileQuery,
     },
     models::groups::{CreateOrUpdateGroup, Group, GroupUser},
     repositories::group_repository::GroupRepository,
-    utils::{api_errors::ApiError, time::TimePeriod},
+    utils::{errors::app_error::AppError, time::TimePeriod},
 };
 
 use super::{
@@ -51,7 +51,7 @@ impl GroupService {
     pub async fn create_or_update_group(
         &self,
         payload: CreateGroupRequest,
-    ) -> Result<CreateOrUpdateGroup, ApiError> {
+    ) -> Result<CreateOrUpdateGroup, AppError> {
         let payload = match payload.logo_uri {
             Some(_) => payload,
             None => {
@@ -92,28 +92,28 @@ impl GroupService {
                 &payload.settings.unwrap_or_default(),
             )
             .await
-            .map_err(ApiError::DatabaseError)
+            .map_err(AppError::DatabaseError)
     }
 
-    pub async fn get_group(&self, id: i64) -> Result<Group, ApiError> {
+    pub async fn get_group(&self, id: i64) -> Result<Group, AppError> {
         self.repository
             .get_group(id)
             .await?
-            .ok_or(ApiError::NotFound("Group not found".to_string()))
+            .ok_or(AppError::NotFound("Group not found".to_string()))
     }
 
-    pub async fn list_groups(&self, query: &ListGroupsQuery) -> Result<Vec<Group>, ApiError> {
+    pub async fn list_groups(&self, query: &ListGroupsQuery) -> Result<Vec<Group>, AppError> {
         self.repository
             .list_groups(query)
             .await
-            .map_err(|e| ApiError::DatabaseError(e))
+            .map_err(|e| AppError::DatabaseError(e))
     }
 
     pub async fn add_user_to_group(
         &self,
         group_id: i64,
         payload: &AddUserRequest,
-    ) -> Result<GroupUser, ApiError> {
+    ) -> Result<GroupUser, AppError> {
         let user_id = match (payload.user_id, &payload.telegram_id) {
             (Some(id), _) => id,
             (None, Some(telegram_id)) => {
@@ -124,7 +124,7 @@ impl GroupService {
                 user.unwrap().id
             }
             (None, None) => {
-                return Err(ApiError::BadRequest(
+                return Err(AppError::BadRequest(
                     "Either user_id or telegram_id must be provided".to_string(),
                 ))
             }
@@ -135,14 +135,14 @@ impl GroupService {
         self.repository
             .add_user_to_group(group_id, user_id)
             .await
-            .map_err(|e| ApiError::DatabaseError(e))
+            .map_err(|e| AppError::DatabaseError(e))
     }
 
     pub async fn remove_user_from_group(
         &self,
         group_id: i64,
         user_id: Uuid,
-    ) -> Result<GroupUser, ApiError> {
+    ) -> Result<GroupUser, AppError> {
         self.get_group(group_id).await?;
 
         let group_user = self.repository.get_group_user(group_id, user_id).await?;
@@ -153,18 +153,21 @@ impl GroupService {
                 .await?;
             Ok(group_user)
         } else {
-            Err(ApiError::UserNotFound)
+            Err(AppError::NotFound(format!(
+                "User with id {} not found in group {}",
+                user_id, group_id
+            )))
         }
     }
 
     pub async fn get_user_groups(
         &self,
         user_id: Uuid,
-    ) -> Result<Vec<CreateOrUpdateGroup>, ApiError> {
+    ) -> Result<Vec<CreateOrUpdateGroup>, AppError> {
         self.repository
             .list_user_groups(user_id)
             .await
-            .map_err(|e| ApiError::DatabaseError(e))
+            .map_err(|e| AppError::DatabaseError(e))
     }
 
     pub async fn list_group_members(
@@ -174,7 +177,7 @@ impl GroupService {
         page: u32,
         sort: Option<ProfileLeaderboardSort>,
         username: Option<String>,
-    ) -> Result<GroupMembersResponse, ApiError> {
+    ) -> Result<GroupMembersResponse, AppError> {
         let (group_members, group_name, total) = self
             .repository
             .list_group_members(group_id, limit, page, sort.is_some())
@@ -234,18 +237,16 @@ impl GroupService {
 
             Ok(group_members_response)
         } else {
-            Err(ApiError::InternalServerError(
-                "Profile service is not available".to_string(),
-            ))
+            Err(AppError::InternalServerError())
         }
     }
 
-    pub async fn group_exists(&self, group_id: i64) -> Result<bool, ApiError> {
+    pub async fn group_exists(&self, group_id: i64) -> Result<bool, AppError> {
         self.repository.group_exists(group_id).await.map_err(|e| {
             if e.to_string().contains("sqlx::error::RowNotFound") {
-                ApiError::NotFound("Group not found".to_string())
+                AppError::NotFound("Group not found".to_string())
             } else {
-                ApiError::DatabaseError(e)
+                AppError::DatabaseError(e)
             }
         })
     }

@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use get_latest_w_metadata::LatestTokenMetadataResponse;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use reqwest::Client;
-use tracing::{error, info};
+use tracing::{debug, error};
 
-use crate::utils::api_errors::ApiError;
+use crate::utils::errors::app_error::AppError;
 
 pub mod get_latest_w_metadata;
 
@@ -26,10 +26,10 @@ impl RustMonorepoService {
     pub async fn get_latest_w_metadata(
         &self,
         addresses: &[String],
-    ) -> Result<HashMap<String, LatestTokenMetadataResponse>, ApiError> {
-        let body = serde_json::to_string(&addresses)
-            .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
-        info!("Sending data to rust monorepo: {}", body.len());
+    ) -> Result<HashMap<String, LatestTokenMetadataResponse>, AppError> {
+        let body =
+            serde_json::to_string(&addresses).map_err(|e| AppError::InternalServerError())?;
+        debug!("Sending data to rust monorepo: {}", body.len());
         let url = format!("{}/price/latest-with-metadata", self.rust_monorepo_url);
         let res = self
             .client
@@ -43,7 +43,7 @@ impl RustMonorepoService {
             Ok(t) => t,
             Err(e) => {
                 error!("Failed to deserialize response for {:?}: {}", addresses, e);
-                return Err(ApiError::RequestError(e));
+                return Err(AppError::RequestError(e));
             }
         };
 

@@ -2,7 +2,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
-use crate::utils::api_errors::ApiError;
+use crate::utils::errors::app_error::AppError;
 
 use super::BirdeyeService;
 
@@ -55,7 +55,7 @@ impl BirdeyeService {
         time_start: i64,
         time_end: i64,
         resolution: &str,
-    ) -> Result<BirdeyeOHLCVItem, ApiError> {
+    ) -> Result<BirdeyeOHLCVItem, AppError> {
         let query = BirdeyeOHLCVQuery {
             address: address.to_owned(),
             interval: resolution.to_owned(),
@@ -77,7 +77,7 @@ impl BirdeyeService {
 
         let ohlcv_response: OHLCVResponse = serde_json::from_str(&json_str).map_err(|e| {
             error!("Error fetching OHLCV {}: {}", json_str, e);
-            ApiError::InternalServerError("Internal server error".to_string())
+            AppError::InternalServerError()
         })?;
 
         let max_high = ohlcv_response

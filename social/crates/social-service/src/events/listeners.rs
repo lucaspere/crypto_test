@@ -2,7 +2,7 @@ use sqlx::{postgres::PgListener, PgPool};
 use std::{collections::HashMap, sync::Arc};
 use tracing::{debug, error, info, warn};
 
-use crate::{settings::Settings, utils::api_errors::ApiError};
+use crate::{settings::Settings, utils::errors::app_error::AppError};
 
 use super::{handlers::EventHandler, types::Channel};
 
@@ -15,7 +15,7 @@ impl PostgresEventListener {
     pub async fn new(
         settings: Arc<Settings>,
         handlers: HashMap<Channel, Box<dyn EventHandler>>,
-    ) -> Result<Self, ApiError> {
+    ) -> Result<Self, AppError> {
         info!("Initializing PostgresEventListener");
         let pool = PgPool::connect(&settings.database_url).await?;
         let listener = PgListener::connect_with(&pool).await?;
@@ -23,7 +23,7 @@ impl PostgresEventListener {
         Ok(Self { listener, handlers })
     }
 
-    pub async fn start(&mut self) -> Result<(), ApiError> {
+    pub async fn start(&mut self) -> Result<(), AppError> {
         let channels: Vec<String> = self.handlers.keys().map(|c| c.to_string()).collect();
 
         if channels.is_empty() {

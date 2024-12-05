@@ -1,11 +1,11 @@
 use super::{types::TokenReportResponse, TokenDataService};
-use crate::utils::api_errors::ApiError;
+use crate::utils::errors::app_error::AppError;
 
 impl TokenDataService {
     pub async fn get_token_report(
         &self,
         contract_addresses: &[String],
-    ) -> Result<TokenReportResponse, ApiError> {
+    ) -> Result<TokenReportResponse, AppError> {
         let cache_key = format!("token_report:{}", contract_addresses.join(","));
         if let Some(cached_response) = self
             .redis_service

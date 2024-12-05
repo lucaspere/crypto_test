@@ -9,7 +9,7 @@ use teloxide::Bot;
 use uuid::Uuid;
 
 use crate::models::users::SavedUser;
-use crate::utils::api_errors::ApiError;
+use crate::utils::errors::app_error::AppError;
 
 pub struct TeloxideTelegramBotApi {
     bot: Bot,
@@ -17,7 +17,7 @@ pub struct TeloxideTelegramBotApi {
 }
 
 impl TeloxideTelegramBotApi {
-    pub async fn new(bot: Bot) -> Result<Self, ApiError> {
+    pub async fn new(bot: Bot) -> Result<Self, AppError> {
         let bot_info = bot.get_me().await.ok();
         Ok(Self { bot, bot_info })
     }
@@ -28,7 +28,7 @@ impl TeloxideTelegramBotApi {
         &'a self,
         telegram_id: u64,
         message: &'a str,
-    ) -> Result<(), ApiError> {
+    ) -> Result<(), AppError> {
         self.bot
             .send_message(Recipient::from(UserId(telegram_id)), message)
             .parse_mode(ParseMode::Html)
@@ -51,7 +51,7 @@ impl TeloxideTelegramBotApi {
     pub async fn get_user_by_telegram_id(
         &self,
         telegram_id: i64,
-    ) -> Result<(SavedUser, Option<String>), ApiError> {
+    ) -> Result<(SavedUser, Option<String>), AppError> {
         let user = self
             .bot
             .get_chat(Recipient::from(UserId(telegram_id as u64)))
@@ -76,7 +76,7 @@ impl TeloxideTelegramBotApi {
         Ok((user, photo))
     }
 
-    pub async fn get_user_avatar_by_id(&self, telegram_id: i64) -> Result<Vec<u8>, ApiError> {
+    pub async fn get_user_avatar_by_id(&self, telegram_id: i64) -> Result<Vec<u8>, AppError> {
         let user = self
             .bot
             .get_user_profile_photos(UserId(telegram_id as u64))
@@ -86,7 +86,7 @@ impl TeloxideTelegramBotApi {
             .photos
             .first()
             .and_then(|photos| photos.last())
-            .ok_or(ApiError::NotFound("User has no profile photo".into()))?;
+            .ok_or(AppError::NotFound("User has no profile photo".into()))?;
 
         let photo_url = photo.file.id.clone();
         let file = self.bot.get_file(photo_url).await?;
@@ -96,7 +96,7 @@ impl TeloxideTelegramBotApi {
         Ok(image_data)
     }
 
-    pub async fn get_user_avatar_by_file_id(&self, file_id: &str) -> Result<Vec<u8>, ApiError> {
+    pub async fn get_user_avatar_by_file_id(&self, file_id: &str) -> Result<Vec<u8>, AppError> {
         let file = self.bot.get_file(file_id).await?;
 
         let mut image_data = Vec::new();
@@ -107,7 +107,7 @@ impl TeloxideTelegramBotApi {
     pub async fn get_username_image_by_telegram_id(
         &self,
         telegram_id: i64,
-    ) -> Result<(String, Option<Vec<u8>>, Option<String>), ApiError> {
+    ) -> Result<(String, Option<Vec<u8>>, Option<String>), AppError> {
         let user = self
             .bot
             .get_chat(Recipient::from(UserId(telegram_id as u64)))

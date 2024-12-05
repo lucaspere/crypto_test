@@ -20,7 +20,7 @@ pub mod user_handlers;
 #[openapi(
     tags(
         (name = "users", description = "User management API"),
-        (name = "tokens", description = "Token management API"),
+        (name = "token-picks", description = "Token pick management API"),
         (name = "groups", description = "Group management API"),
         (name = "profiles", description = "Profile management API")
     ),
@@ -55,11 +55,11 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let api_doc = ApiDoc::openapi();
     let token_router = OpenApiRouter::new()
         .routes(routes!(
-            token_handlers::get_token_picks,
-            token_handlers::post_token_pick,
+            token_handlers::list_token_picks,
+            token_handlers::create_token_pick,
             token_handlers::delete_token_pick
         ))
-        .routes(routes!(token_handlers::get_token_picks_by_group));
+        .routes(routes!(token_handlers::list_group_token_picks));
 
     let profile_router = OpenApiRouter::new()
         .routes(routes!(profile_handlers::get_profile))
@@ -69,7 +69,7 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let user_router = OpenApiRouter::new()
         .routes(routes!(user_handlers::follow_user))
         .routes(routes!(user_handlers::unfollow_user))
-        .routes(routes!(user_handlers::get_user_followers))
+        .routes(routes!(user_handlers::get_followers))
         .routes(routes!(user_handlers::upload_avatar));
 
     let group_router = OpenApiRouter::new()
@@ -91,8 +91,7 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
     let profile_router =
         OpenApiRouter::with_openapi(api_doc.clone()).nest("/profiles", profile_router);
 
-    let token_router =
-        OpenApiRouter::with_openapi(api_doc.clone()).nest("/tokens/picks", token_router);
+    let token_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/tokens", token_router);
 
     let group_router = OpenApiRouter::with_openapi(api_doc.clone()).nest("/groups", group_router);
 

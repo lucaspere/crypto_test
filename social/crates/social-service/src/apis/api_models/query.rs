@@ -52,7 +52,7 @@ pub struct ListGroupsQuery {
 }
 
 #[derive(Debug, Deserialize, IntoParams, Default)]
-pub struct GroupPicksQuery {
+pub struct GroupProfileQuery {
     pub username: Option<String>,
     #[param(default = 1)]
     pub page: u32,
@@ -119,4 +119,30 @@ impl ToString for PickLeaderboardSort {
 
 pub fn default_limit() -> i64 {
     10
+}
+
+#[derive(Debug, Deserialize, IntoParams, Default)]
+pub struct GroupPicksQuery {
+    pub username: Option<String>,
+    #[param(default = 1)]
+    pub page: u32,
+    #[param(default = 10)]
+    pub limit: u32,
+    pub order_by: Option<PickLeaderboardSort>,
+    pub order_direction: Option<String>,
+}
+
+#[derive(Debug, Deserialize, IntoParams, Clone)]
+pub struct GroupLeaderboardQuery {
+    #[param(default = 10)]
+    #[serde(default = "default_limit")]
+    /// Number of picks to return
+    pub limit: i64,
+    #[param(default = false)]
+    #[serde(default)]
+    /// Force refresh the leaderboard cache
+    pub force_refresh: bool,
+    #[param(default = "month")]
+    /// Timeframe to get picks for, available options: `six_hours`, `day`, `week`, `month`, `all_time`
+    pub timeframe: TimePeriod,
 }

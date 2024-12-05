@@ -14,7 +14,7 @@ use crate::{
         token_picks::{TokenPick, TokenPickResponse, TokenPicksGroup},
         tokens::{Chain, Token},
     },
-    utils::{api_errors::ApiError, time::TimePeriod},
+    utils::{errors::app_error::AppError, time::TimePeriod},
 };
 
 pub const QUALIFIED_TOKEN_PICKS_FILTER: &str = r#"
@@ -411,7 +411,7 @@ impl TokenRepository {
             .await
     }
 
-    pub async fn update_token_picks(&self, picks: Vec<TokenPick>) -> Result<(), ApiError> {
+    pub async fn update_token_picks(&self, picks: Vec<TokenPick>) -> Result<(), AppError> {
         let query = r#"
 			UPDATE social.token_picks
 			SET highest_market_cap = $1,
@@ -437,9 +437,7 @@ impl TokenRepository {
             if result.rows_affected() != 1 {
                 error!("Failed to update token pick: {}", result.rows_affected());
                 tx.rollback().await?;
-                return Err(ApiError::InternalServerError(
-                    "Failed to update token pick".to_string(),
-                ));
+                return Err(AppError::InternalServerError());
             }
         }
 
@@ -514,7 +512,7 @@ impl TokenRepository {
     pub async fn count_user_picks_in_period(
         &self,
         scope: UserPickLimitScope,
-    ) -> Result<i64, ApiError> {
+    ) -> Result<i64, AppError> {
         let query = match scope {
             UserPickLimitScope::User(user_id, time_period) => sqlx::query_scalar(
                 r#"
