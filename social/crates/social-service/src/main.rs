@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Server running on http://{:?}", listener.local_addr());
     let settings = Arc::new(settings);
 
-    if settings.environment != Some("DEV".to_string()) {
+    if settings.environment != Some("dev".to_string()) {
         jobs::start_background_jobs(container.clone()).await;
         tokio::spawn(async move {
             start_event_listeners(settings, container)

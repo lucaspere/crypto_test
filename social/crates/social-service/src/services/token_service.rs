@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, Utc};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
