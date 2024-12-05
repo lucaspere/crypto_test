@@ -168,7 +168,7 @@ impl ProfileService {
                     username: params.username.clone(),
                     ..Default::default()
                 },
-                None,
+                Some(false),
             )
             .await?;
 
