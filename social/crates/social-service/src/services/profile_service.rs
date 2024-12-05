@@ -30,7 +30,7 @@ use crate::{
         user_stats::{BestPick, UserStats},
     },
     repositories::{token_repository::TokenRepository, user_repository::UserRepository},
-    utils::{api_errors::ApiError, redis_keys::RedisKeys},
+    utils::{errors::app_error::AppError, redis_keys::RedisKeys},
 };
 
 use super::{redis_service::RedisService, s3_service::S3Service, token_service::TokenService};
@@ -79,12 +79,15 @@ impl ProfileService {
         &self,
         params: ProfileQuery,
         user_id: Option<Uuid>,
-    ) -> Result<ProfileDetailsResponse, ApiError> {
+    ) -> Result<ProfileDetailsResponse, AppError> {
         let user = self
             .user_repository
             .find_by_username(&params.username)
             .await?
-            .ok_or(ApiError::UserNotFound)?;
+            .ok_or(AppError::NotFound(format!(
+                "User with username {} not found",
+                params.username
+            )))?;
 
         info!(
             "User found, fetching user picks and stats for username: {}",
@@ -127,7 +130,7 @@ impl ProfileService {
     pub async fn list_profiles(
         &self,
         params: &ProfileLeaderboardQuery,
-    ) -> Result<LeaderboardResponse, ApiError> {
+    ) -> Result<LeaderboardResponse, AppError> {
         info!("Listing profiles with params: {:?}", params);
         let cache_key = format!(
             "{}:leaderboard:{}:{}{}:{}",
@@ -224,7 +227,7 @@ impl ProfileService {
     pub async fn get_user_picks_and_stats(
         &self,
         params: &ProfilePicksAndStatsQuery,
-    ) -> Result<(Vec<TokenPickResponse>, UserStats), ApiError> {
+    ) -> Result<(Vec<TokenPickResponse>, UserStats), AppError> {
         info!("Getting user picks and stats for {}", params.username);
 
         let paramsx = TokenQuery {
@@ -306,7 +309,10 @@ impl ProfileService {
             .user_repository
             .find_by_username(&params.username)
             .await?
-            .ok_or(ApiError::UserNotFound)?;
+            .ok_or(AppError::NotFound(format!(
+                "User with username {} not found",
+                params.username
+            )))?;
 
         info!(
             "User found, fetching user picks and stats for username: {}",

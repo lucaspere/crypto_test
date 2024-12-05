@@ -1,6 +1,6 @@
 use crate::models::users::{SavedUser, User, UserResponse};
 use crate::repositories::user_repository::UserRepository;
-use crate::utils::api_errors::ApiError;
+use crate::utils::errors::app_error::AppError;
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
@@ -53,15 +53,20 @@ impl UserService {
         Ok(user.map(UserResponse::from))
     }
 
-    pub async fn follow_user(&self, user_id: Uuid, followed_id: Uuid) -> Result<(), ApiError> {
+    pub async fn follow_user(&self, user_id: Uuid, followed_id: Uuid) -> Result<(), AppError> {
         let user = self
             .get_by_id(followed_id)
             .await?
-            .ok_or(ApiError::UserNotFound)?;
+            .ok_or(AppError::NotFound(format!(
+                "User with id {} not found",
+                followed_id
+            )))?;
         let follower_user = self.get_followers(&user.username).await?;
         let already_following = follower_user.iter().any(|user| user.id == user_id);
         if already_following {
-            return Err(ApiError::UserAlreadyFollowed);
+            return Err(AppError::BusinessLogicError(
+                "User already followed".to_string(),
+            ));
         }
 
         self.user_repository
@@ -95,7 +100,7 @@ impl UserService {
         &self,
         telegram_user_id: i64,
         _telegram_chat_id: Option<i64>,
-    ) -> Result<(Option<SavedUser>, Option<String>), ApiError> {
+    ) -> Result<(Option<SavedUser>, Option<String>), AppError> {
         if let Some((mut saved_user, photo_id)) = self
             .telegram_service
             .get_user_by_telegram_id(telegram_user_id)
@@ -123,7 +128,10 @@ impl UserService {
 
             Ok((Some(saved_user), None))
         } else {
-            Err(ApiError::UserNotFound)
+            Err(AppError::NotFound(format!(
+                "User with telegram id {} not found",
+                telegram_user_id
+            )))
         }
     }
 }

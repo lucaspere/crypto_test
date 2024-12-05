@@ -3,53 +3,54 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    response::IntoResponse,
     Json,
 };
 use futures::future::join_all;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
+use serde::Deserialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    apis::api_models::query::{default_limit, GroupMembersQuery, ListGroupMembersQuery},
+    apis::api_models::query::{
+        GroupLeaderboardQuery, GroupMembersQuery, GroupPicksQuery, ListGroupMembersQuery,
+        ListGroupsQuery,
+    },
     models::{
         groups::{CreateOrUpdateGroup, GroupUser},
         token_picks::TokenPickResponse,
     },
-    utils::{api_errors::ApiError, time::TimePeriod, ErrorResponse},
+    utils::errors::{app_error::AppError, error_payload::ErrorPayload},
     AppState,
 };
 
-use super::{
-    api_models::{
-        query::PickLeaderboardSort,
-        request::CreateGroupRequest,
-        response::{
-            GroupResponse, LeaderboardGroupResponse, PaginatedGroupMembersResponse,
-            PaginatedTokenPickResponse,
-        },
+use super::api_models::{
+    request::{AddUserRequest, CreateGroupRequest, TokenGroupQuery},
+    response::{
+        GroupResponse, GroupUserResponse, LeaderboardGroupResponse, PaginatedGroupMembersResponse,
+        PaginatedTokenPickResponse,
     },
-    token_handlers::TokenGroupQuery,
 };
 
-pub const GROUP_TAG: &str = "group";
+pub const GROUP_TAG: &str = "groups";
 
+/// Create or update a group
 #[utoipa::path(
     post,
     tag = GROUP_TAG,
     path = "/",
-    description = "Create or update a group",
+    operation_id = "createOrUpdateGroup",
     request_body = CreateGroupRequest,
     responses(
-        (status = 200, description = "Success", body = CreateOrUpdateGroup),
-        (status = 400, description = "Bad Request", body = ErrorResponse),
-        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+        (status = 200, description = "Group created or updated successfully", body = CreateOrUpdateGroup),
+        (status = 400, description = "Bad Request", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     )
 )]
 pub(super) async fn create_or_update_group(
     State(app_state): State<Arc<AppState>>,
     Json(payload): Json<CreateGroupRequest>,
-) -> Result<(StatusCode, Json<CreateOrUpdateGroup>), ApiError> {
+) -> Result<(StatusCode, Json<CreateOrUpdateGroup>), AppError> {
     let group = app_state
         .group_service
         .create_or_update_group(payload)
@@ -58,50 +59,46 @@ pub(super) async fn create_or_update_group(
     Ok((StatusCode::OK, group.into()))
 }
 
+/// Get a group by ID
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/{id}",
+    operation_id = "getGroup",
     responses(
-        (status = 200, description = "Success", body = GroupResponse),
-        (status = 404, description = "Not Found", body = ErrorResponse),
+        (status = 200, description = "Group retrieved successfully", body = GroupResponse),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
-    params((
-        "id" = i64,
-        Path,
-        description = "Group ID",
-    ))
+    params(
+        ("id" = i64, Path, description = "Group ID")
+    )
 )]
 pub(super) async fn get_group(
     State(app_state): State<Arc<AppState>>,
     Path(id): Path<i64>,
-) -> Result<(StatusCode, Json<GroupResponse>), ApiError> {
+) -> Result<impl IntoResponse, AppError> {
     let group = app_state.group_service.get_group(id).await?;
-
-    Ok((StatusCode::OK, GroupResponse::from(group).into()))
+    Ok((StatusCode::OK, Json(GroupResponse::from(group))))
 }
 
-#[derive(Debug, Deserialize, IntoParams, Default)]
-pub struct ListGroupsQuery {
-    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
-    pub user_id: Option<Uuid>,
-}
-
+/// List all groups
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/list",
+    operation_id = "listGroups",
     responses(
-        (status = 200, description = "Success", body = Vec<GroupResponse>),
-        (status = 404, description = "Not Found", body = ErrorResponse),
-        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+        (status = 200, description = "Groups listed successfully", body = Vec<GroupResponse>),
+        (status = 404, description = "No groups found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
     params(ListGroupsQuery)
 )]
 pub(super) async fn list_groups(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<ListGroupsQuery>,
-) -> Result<(StatusCode, Json<Vec<GroupResponse>>), ApiError> {
+) -> Result<(StatusCode, Json<Vec<GroupResponse>>), AppError> {
     let groups = app_state.group_service.list_groups(&query).await?;
 
     Ok((
@@ -110,23 +107,16 @@ pub(super) async fn list_groups(
     ))
 }
 
-#[derive(Debug, Deserialize, IntoParams, Default)]
-pub struct GroupPicksQuery {
-    pub username: Option<String>,
-    #[param(default = 1)]
-    pub page: u32,
-    #[param(default = 10)]
-    pub limit: u32,
-    pub order_by: Option<PickLeaderboardSort>,
-    pub order_direction: Option<String>,
-}
-
+/// Get group picks
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/{id}/picks",
+    operation_id = "getGroupPicks",
     responses(
         (status = 200, description = "Success", body = Vec<PaginatedTokenPickResponse>),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
     params(GroupPicksQuery)
 )]
@@ -134,7 +124,7 @@ pub(super) async fn get_group_picks(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Query(query): Query<GroupPicksQuery>,
-) -> Result<(StatusCode, Json<PaginatedTokenPickResponse>), ApiError> {
+) -> Result<(StatusCode, Json<PaginatedTokenPickResponse>), AppError> {
     let limit = query.limit;
     let page = query.page;
 
@@ -165,12 +155,16 @@ pub(super) async fn get_group_picks(
     ))
 }
 
+/// Get group members
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/{id}/members",
+    operation_id = "getGroupMembers",
     responses(
-        (status = 200, description = "Success", body = PaginatedGroupMembersResponse)
+        (status = 200, description = "Group members retrieved successfully", body = PaginatedGroupMembersResponse),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
     params(GroupMembersQuery)
 )]
@@ -178,7 +172,7 @@ pub(super) async fn get_group_members(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Query(query): Query<GroupMembersQuery>,
-) -> Result<(StatusCode, Json<PaginatedGroupMembersResponse>), ApiError> {
+) -> Result<(StatusCode, Json<PaginatedGroupMembersResponse>), AppError> {
     let limit = query.limit;
     let page = query.page;
 
@@ -200,37 +194,25 @@ pub(super) async fn get_group_members(
     ))
 }
 
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AddUserRequest {
-    #[serde(deserialize_with = "crate::utils::serde_utils::deserialize_optional_uuid")]
-    pub user_id: Option<Uuid>,
-    pub telegram_id: Option<i64>,
-}
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GroupUserResponse {
-    group_id: i64,
-    user_id: Uuid,
-    joined_at: chrono::DateTime<chrono::Utc>,
-}
-
+/// Add a user to a group
 #[utoipa::path(
     post,
     tag = GROUP_TAG,
     path = "/{id}/users",
+    operation_id = "addUserToGroup",
     request_body = AddUserRequest,
-    description = "Add a user to a group",
     responses(
-        (status = 200, description = "Success", body = GroupUserResponse),
+        (status = 200, description = "User added to group successfully", body = GroupUserResponse),
+        (status = 400, description = "Bad Request", body = ErrorPayload),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     )
 )]
 pub async fn add_user_to_group(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Json(payload): Json<AddUserRequest>,
-) -> Result<(StatusCode, Json<GroupUserResponse>), ApiError> {
+) -> Result<(StatusCode, Json<GroupUserResponse>), AppError> {
     let group_user = app_state
         .group_service
         .add_user_to_group(group_id, &payload)
@@ -242,29 +224,34 @@ pub async fn add_user_to_group(
         joined_at: group_user.joined_at,
     };
 
-    Ok((StatusCode::OK, res.into()))
+    Ok((StatusCode::OK, Json(res)))
 }
+
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveUserRequest {
     user_id: Uuid,
 }
 
+/// Remove a user from a group
 #[utoipa::path(
     delete,
     tag = GROUP_TAG,
     path = "/{id}/users",
     request_body = RemoveUserRequest,
-    description = "Remove a user from a group",
+    operation_id = "removeUserFromGroup",
     responses(
         (status = 200, description = "Success", body = GroupUser),
+        (status = 400, description = "Bad Request", body = ErrorPayload),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     )
 )]
 pub async fn remove_user_from_group(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Json(payload): Json<RemoveUserRequest>,
-) -> Result<(StatusCode, Json<GroupUser>), ApiError> {
+) -> Result<(StatusCode, Json<GroupUser>), AppError> {
     let group_user = app_state
         .group_service
         .remove_user_from_group(group_id, payload.user_id)
@@ -273,19 +260,23 @@ pub async fn remove_user_from_group(
     Ok((StatusCode::OK, group_user.into()))
 }
 
+/// Get group members leaderboard
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/leaderboard",
+    operation_id = "getGroupMembersLeaderboard",
     responses(
         (status = 200, description = "Success", body = LeaderboardGroupResponse),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
     params(ListGroupMembersQuery)
 )]
 pub(super) async fn leaderboard(
     State(app_state): State<Arc<AppState>>,
     Query(params): Query<ListGroupMembersQuery>,
-) -> Result<(StatusCode, Json<LeaderboardGroupResponse>), ApiError> {
+) -> Result<(StatusCode, Json<LeaderboardGroupResponse>), AppError> {
     let user_groups = app_state
         .group_service
         .get_user_groups(params.user_id)
@@ -312,29 +303,15 @@ pub(super) async fn leaderboard(
     Ok((StatusCode::OK, Json(LeaderboardGroupResponse(groups))))
 }
 
-#[derive(Debug, Deserialize, IntoParams, Clone)]
-pub struct GroupLeaderboardQuery {
-    #[param(default = 10)]
-    #[serde(default = "default_limit")]
-    /// Number of picks to return
-    pub limit: i64,
-    #[param(default = false)]
-    #[serde(default)]
-    /// Force refresh the leaderboard cache
-    pub force_refresh: bool,
-    #[param(default = "month")]
-    /// Timeframe to get picks for, available options: `six_hours`, `day`, `week`, `month`, `all_time`
-    pub timeframe: TimePeriod,
-}
-
+/// Get group leaderboard
 #[utoipa::path(
     get,
     tag = GROUP_TAG,
     path = "/{id}/leaderboard",
     responses(
         (status = 200, description = "Group leaderboard", body = Vec<TokenPickResponse>),
-        (status = 404, description = "Group not found", body = ErrorResponse),
-        (status = 500, description = "Internal server error", body = ErrorResponse),
+        (status = 404, description = "Group not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload),
     ),
     params(
         ("id" = i64, Path, description = "Group ID"),
@@ -345,12 +322,11 @@ pub async fn get_group_leaderboard(
     State(app_state): State<Arc<AppState>>,
     Path(group_id): Path<i64>,
     Query(query): Query<GroupLeaderboardQuery>,
-) -> Result<(StatusCode, Json<Vec<TokenPickResponse>>), ApiError> {
+) -> Result<(StatusCode, Json<Vec<TokenPickResponse>>), AppError> {
     if !app_state.group_service.group_exists(group_id).await? {
-        return Err(ApiError::NotFound("Group not found".to_string()));
+        return Err(AppError::NotFound("Group not found".to_string()));
     }
 
-    // Force refresh if requested
     if query.force_refresh {
         app_state
             .token_service

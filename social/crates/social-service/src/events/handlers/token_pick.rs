@@ -11,12 +11,12 @@ use crate::{
         ext_data_services_v1::token_data::types::TokenReportData,
         rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
     },
-    utils::{api_errors::ApiError, redis_keys::RedisKeys},
+    utils::{errors::app_error::AppError, redis_keys::RedisKeys},
 };
 use futures::future::join_all;
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 pub struct TokenPickHandler {
     services: Arc<ServiceContainer>,
@@ -28,7 +28,7 @@ impl TokenPickHandler {
     }
 
     #[instrument(skip(self, data), fields(user_id = %data.token_pick.id))]
-    pub(super) async fn notify_followers(&self, data: &TokenPickEventData) -> Result<(), ApiError> {
+    pub(super) async fn notify_followers(&self, data: &TokenPickEventData) -> Result<(), AppError> {
         let lock_key = format!(
             "{}{}",
             RedisKeys::NOTIFY_FOLLOWERS_LOCK_KEY,
@@ -39,7 +39,10 @@ impl TokenPickHandler {
             .redis_service
             .set_nx(&lock_key, "1", 10)
             .await
-            .map_err(|e| ApiError::InternalError(format!("Redis lock error: {}", e)))?;
+            .map_err(|e| {
+                warn!("Failed to acquire Redis lock: {}", e);
+                AppError::InternalServerError()
+            })?;
 
         if !lock_acquired {
             info!("Another instance is currently processing token picks");

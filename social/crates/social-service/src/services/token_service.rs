@@ -11,10 +11,9 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::{
-    apis::{
-        api_models::{query::TokenQuery, request::CreateGroupRequest},
-        group_handlers::{AddUserRequest, GroupLeaderboardQuery},
-        token_handlers::{DeleteTokenPickRequest, TokenGroupQuery},
+    apis::api_models::{
+        query::{GroupLeaderboardQuery, TokenQuery},
+        request::{AddUserRequest, CreateGroupRequest, DeleteTokenPickRequest, TokenGroupQuery},
     },
     external_services::{
         birdeye::BirdeyeService,
@@ -28,7 +27,7 @@ use crate::{
     repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
     services::user_service::UserService,
     utils::{
-        api_errors::ApiError, math::calculate_price_multiplier, redis_keys::RedisKeys,
+        errors::app_error::AppError, math::calculate_price_multiplier, redis_keys::RedisKeys,
         time::TimePeriod,
     },
 };
@@ -91,7 +90,7 @@ impl TokenService {
         &self,
         query: TokenQuery,
         qualified: Option<bool>,
-    ) -> Result<(Vec<TokenPickResponse>, i64), ApiError> {
+    ) -> Result<(Vec<TokenPickResponse>, i64), AppError> {
         debug!("Listing token picks with query: {:?}", query);
         let mut query = query.clone();
         let user = if let Some(username) = &query.username {
@@ -140,12 +139,12 @@ impl TokenService {
             self.token_repository
                 .list_token_picks_group(Some(&params))
                 .await
-                .map_err(ApiError::from)?
+                .map_err(AppError::from)?
         } else {
             self.token_repository
                 .list_token_picks(Some(&params), qualified)
                 .await
-                .map_err(ApiError::from)?
+                .map_err(AppError::from)?
         };
 
         let pick_responses: Vec<_> = picks
@@ -177,7 +176,7 @@ impl TokenService {
     async fn process_pick_with_cache(
         &self,
         pick: &mut TokenPick,
-    ) -> Result<TokenPickResponse, ApiError> {
+    ) -> Result<TokenPickResponse, AppError> {
         let cache_key = format!("token_pick:{}", pick.id);
 
         if let Ok(Some(cached_pick)) = self
@@ -204,7 +203,7 @@ impl TokenService {
     pub async fn process_single_pick(
         &self,
         pick: &mut TokenPick,
-    ) -> Result<TokenPickResponse, ApiError> {
+    ) -> Result<TokenPickResponse, AppError> {
         let latest_prices = self
             .rust_monorepo_service
             .get_latest_w_metadata(&[pick.token.address.clone()])
@@ -214,12 +213,12 @@ impl TokenService {
                     "Failed to fetch latest metadata for token pick {}: {}",
                     pick.id, e
                 );
-                ApiError::InternalServerError("Failed to fetch latest metadata".to_string())
+                AppError::InternalServerError()
             })?;
 
         let latest_price = latest_prices
             .get(&pick.token.address)
-            .ok_or_else(|| ApiError::InternalServerError("Price data not found".to_string()))?;
+            .ok_or_else(|| AppError::NotFound("Price data not found".to_string()))?;
 
         let current_market_cap = latest_price.price * latest_price.token_info.supply;
         let mut has_update = false;
@@ -236,7 +235,7 @@ impl TokenService {
                 .await
                 .map_err(|e| {
                     error!("Failed to fetch OHLCV for token pick {}: {}", pick.id, e);
-                    ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
+                    AppError::InternalServerError()
                 })?;
 
             let supply = pick
@@ -319,7 +318,7 @@ impl TokenService {
         &self,
         pick_row: &mut TokenPick,
         metadata: &LatestTokenMetadataResponse,
-    ) -> Result<(TokenPickResponse, bool), ApiError> {
+    ) -> Result<(TokenPickResponse, bool), AppError> {
         info!(
             "Processing single pick with metadata for token pick {}",
             pick_row.id
@@ -371,7 +370,7 @@ impl TokenService {
     pub async fn save_token_pick(
         &self,
         pick: TokenPickRequest,
-    ) -> Result<TokenPickResponse, ApiError> {
+    ) -> Result<TokenPickResponse, AppError> {
         info!(
             "Saving token pick for user {} and token {}",
             pick.telegram_user_id, pick.address
@@ -379,7 +378,7 @@ impl TokenService {
 
         let telegram_user_id = pick.telegram_user_id.parse().map_err(|e| {
             error!("Failed to parse telegram user id: {}", e);
-            ApiError::BadRequest("Invalid telegram user id".to_string())
+            AppError::BadRequest("Invalid telegram user id".to_string())
         })?;
         let user = match self
             .user_service
@@ -388,23 +387,26 @@ impl TokenService {
         {
             Some(user) => user,
             None => {
-                tracing::error!("User {} not found", pick.telegram_user_id);
+                debug!("User {} not found", pick.telegram_user_id);
                 let user = self
                     .user_service
                     .upsert_user(telegram_user_id, None)
                     .await?
                     .0
-                    .ok_or(ApiError::UserNotFound)?;
+                    .ok_or(AppError::NotFound("User not found".to_string()))?;
 
                 self.user_service
                     .get_by_telegram_user_id(user.telegram_id)
                     .await?
-                    .ok_or(ApiError::UserNotFound)?
+                    .ok_or(AppError::NotFound(format!(
+                        "User with telegram id {} not found",
+                        telegram_user_id
+                    )))?
             }
         };
 
         if self.has_user_reached_action_limit(&user.id).await? {
-            return Err(ApiError::InternalServerError(
+            return Err(AppError::BusinessLogicError(
                 "User reached the maximum number of picks".to_string(),
             ));
         }
@@ -425,8 +427,8 @@ impl TokenService {
             .await?;
 
         let token_info = token_info.get(&pick.address).ok_or_else(|| {
-            tracing::error!("Token info not found for address {}", pick.address);
-            ApiError::InternalServerError("Token info not found".to_string())
+            error!("Token info not found for address {}", pick.address);
+            AppError::NotFound("Token info not found".to_string())
         })?;
 
         if let Ok(None) = self.token_repository.get_token(&pick.address, None).await {
@@ -449,7 +451,7 @@ impl TokenService {
             user: Some(Json(user.clone())),
             telegram_message_id: Some(pick.telegram_message_id.parse().map_err(|e| {
                 error!("Failed to parse telegram message id: {}", e);
-                ApiError::InternalServerError("Invalid telegram message id".to_string())
+                AppError::BadRequest("Invalid telegram message id".to_string())
             })?),
             price_at_call: token_info.price,
             highest_market_cap: Some(market_cap_at_call),
@@ -457,7 +459,7 @@ impl TokenService {
             market_cap_at_call,
             telegram_id: Some(pick.telegram_user_id.parse().map_err(|e| {
                 error!("Failed to parse telegram user id: {}", e);
-                ApiError::InternalServerError("Invalid telegram user id".to_string())
+                AppError::BadRequest("Invalid telegram user id".to_string())
             })?),
             ..Default::default()
         };
@@ -499,13 +501,13 @@ impl TokenService {
     pub async fn list_token_picks_group(
         &self,
         query: TokenGroupQuery,
-    ) -> Result<(HashMap<String, Vec<TokenPickResponse>>, i64), ApiError> {
+    ) -> Result<(HashMap<String, Vec<TokenPickResponse>>, i64), AppError> {
         let groups = if let Some(user_id) = query.user_id {
             let user = self
                 .user_service
                 .get_by_id(user_id)
                 .await?
-                .ok_or(ApiError::UserNotFound)?;
+                .ok_or(AppError::NotFound("User not found".to_string()))?;
 
             self.group_service.get_user_groups(user.id).await?
         } else if let Some(group_ids) = query.group_ids {
@@ -540,7 +542,7 @@ impl TokenService {
                 None,
             )
             .await
-            .map_err(ApiError::from)?;
+            .map_err(AppError::from)?;
 
         let group_hash: HashMap<i64, &CreateOrUpdateGroup> =
             groups.iter().map(|g| (g.id, g)).collect();
@@ -556,7 +558,7 @@ impl TokenService {
         Ok((map_group_id, total))
     }
 
-    pub async fn has_user_reached_action_limit(&self, user_id: &Uuid) -> Result<bool, ApiError> {
+    pub async fn has_user_reached_action_limit(&self, user_id: &Uuid) -> Result<bool, AppError> {
         let max_limit = UserPickLimitScope::User(*user_id, TimePeriod::Day);
 
         let count = self
@@ -567,23 +569,23 @@ impl TokenService {
         Ok(count >= Self::MAX_PICK_LIMIT)
     }
 
-    pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPick>>, ApiError> {
+    pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPick>>, AppError> {
         info!("Getting all tokens with picks");
         self.token_repository
             .get_all_tokens_with_picks_group_by_group_id()
             .await
-            .map_err(ApiError::from)
+            .map_err(AppError::from)
     }
 
     pub async fn bulk_update_token_picks(
         &self,
         picks: &[TokenPickResponse],
-    ) -> Result<(), ApiError> {
+    ) -> Result<(), AppError> {
         self.token_repository.bulk_update_token_picks(picks).await?;
         Ok(())
     }
 
-    pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), ApiError> {
+    pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), AppError> {
         self.token_repository.save_many_tokens(tokens).await?;
         Ok(())
     }
@@ -592,7 +594,7 @@ impl TokenService {
         &self,
         pick_row: &mut TokenPick,
         metadata: &LatestTokenMetadataResponse,
-    ) -> Result<bool, ApiError> {
+    ) -> Result<bool, AppError> {
         let ohlcv = self
             .birdeye_service
             .get_ohlcv_request(
@@ -608,7 +610,7 @@ impl TokenService {
                     "Failed to fetch OHLCV for token pick {}: {}",
                     pick_row.id, e
                 );
-                ApiError::InternalServerError("Failed to fetch OHLCV".to_string())
+                AppError::InternalServerError()
             })?;
 
         let supply = pick_row
@@ -653,7 +655,7 @@ impl TokenService {
         &self,
         group_id: i64,
         query: &GroupLeaderboardQuery,
-    ) -> Result<Vec<TokenPickResponse>, ApiError> {
+    ) -> Result<Vec<TokenPickResponse>, AppError> {
         let zset_key = RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe.to_string());
         let hash_key =
             RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe.to_string());
@@ -755,7 +757,7 @@ impl TokenService {
         &self,
         group_id: i64,
         query: &GroupLeaderboardQuery,
-    ) -> Result<(), ApiError> {
+    ) -> Result<(), AppError> {
         debug!(
             "Updating group leaderboard cache for group {} with timeframe {}",
             group_id, query.timeframe
@@ -770,7 +772,7 @@ impl TokenService {
         Ok(())
     }
 
-    pub async fn delete_token_pick(&self, body: DeleteTokenPickRequest) -> Result<(), ApiError> {
+    pub async fn delete_token_pick(&self, body: DeleteTokenPickRequest) -> Result<(), AppError> {
         let token_pick = self
             .token_repository
             .get_token_pick_by_telegram_data(
@@ -779,11 +781,13 @@ impl TokenService {
                 body.telegram_chat_id,
             )
             .await?
-            .ok_or(ApiError::TokenPickNotFound)?;
+            .ok_or(AppError::TokenPickNotFound)?;
 
         let pick_time = token_pick.call_date;
         if Utc::now() - Duration::minutes(1) > pick_time {
-            return Err(ApiError::CanOnlyDeletePicksWithin1MinuteOfCreation);
+            return Err(AppError::BusinessLogicError(
+                "Can only delete picks within 1 minute of creation".to_string(),
+            ));
         }
 
         self.token_repository

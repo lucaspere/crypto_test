@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
-use crate::models::token_picks::TokenPick;
+use crate::{models::token_picks::TokenPick, utils::errors::app_error::AppError};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,15 +31,12 @@ pub enum Channel {
 }
 
 impl TryFrom<&str> for Channel {
-    type Error = crate::utils::api_errors::ApiError;
+    type Error = AppError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "social.token_picks" => Ok(Channel::TokenPick),
-            _ => Err(crate::utils::api_errors::ApiError::InternalError(format!(
-                "Unknown channel: {}",
-                value
-            ))),
+            _ => Err(AppError::InternalServerError()),
         }
     }
 }

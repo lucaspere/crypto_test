@@ -6,7 +6,7 @@ use rayon::{
 };
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::sync::Semaphore;
-use tracing::{debug, info, instrument, Span};
+use tracing::{debug, info, instrument, warn, Span};
 
 use crate::{
     container::ServiceContainer,
@@ -15,7 +15,7 @@ use crate::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::Token,
     },
-    utils::{api_errors::ApiError, redis_keys::RedisKeys, time::TimePeriod},
+    utils::{errors::app_error::AppError, redis_keys::RedisKeys, time::TimePeriod},
 };
 
 const PROCESSING_LOCK_TTL: u64 = 180; // 3 minutes
@@ -23,13 +23,16 @@ const BATCH_SIZE: i64 = 30;
 const DB_SLOW_THRESHOLD_SECS: f64 = 2.0;
 
 #[instrument(skip(app_state), fields(job_id = %uuid::Uuid::new_v4()))]
-pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Result<(), ApiError> {
+pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Result<(), AppError> {
     let processing_lock_key = format!("{}-processing-lock", app_state.environment);
     let lock_acquired = app_state
         .redis_service
         .set_nx(&processing_lock_key, "1", PROCESSING_LOCK_TTL)
         .await
-        .map_err(|e| ApiError::InternalError(format!("Redis lock error: {}", e)))?;
+        .map_err(|e| {
+            warn!("Failed to acquire Redis lock: {}", e);
+            AppError::RedisError(e)
+        })?;
 
     if !lock_acquired {
         info!("Another instance is currently processing token picks");
@@ -68,7 +71,8 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
                 );
 
                 let _permit = semaphore.acquire().await.map_err(|_| {
-                    ApiError::InternalError("Failed to acquire semaphore".to_string())
+                    warn!("Failed to acquire semaphore");
+                    AppError::InternalServerError()
                 })?;
 
                 let chunk_start = Instant::now();
@@ -120,7 +124,7 @@ async fn process_address_batch(
     app_state: &Arc<ServiceContainer>,
     address_batch: &[String],
     tokens: &HashMap<String, Vec<TokenPick>>,
-) -> Result<(), ApiError> {
+) -> Result<(), AppError> {
     let start = Instant::now();
 
     let latest_token_info = {
@@ -175,7 +179,7 @@ async fn process_token_picks(
     app_state: &Arc<ServiceContainer>,
     picks: &Vec<TokenPick>,
     metadata: LatestTokenMetadataResponse,
-) -> Result<Vec<TokenPickResponse>, ApiError> {
+) -> Result<Vec<TokenPickResponse>, AppError> {
     let mut picks = picks.clone();
     let pick_futures = picks.iter_mut().map(|pick| {
         app_state
@@ -204,7 +208,7 @@ async fn process_token_picks(
 async fn update_pick_stats(
     app_state: &ServiceContainer,
     pick: TokenPickResponse,
-) -> Result<(), ApiError> {
+) -> Result<(), AppError> {
     let timeframes = [
         (TimePeriod::SixHours, chrono::Duration::hours(6)),
         (TimePeriod::Day, chrono::Duration::days(1)),

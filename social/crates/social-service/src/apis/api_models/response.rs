@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::models::{
     groups::{Group, GroupSettings},
@@ -83,3 +84,10 @@ pub struct LeaderboardResponse {
 
 #[derive(Serialize, ToSchema)]
 pub struct LeaderboardGroupResponse(pub Vec<GroupMembersResponse>);
+
+#[derive(Serialize, ToSchema)]
+pub struct GroupUserResponse {
+    pub group_id: i64,
+    pub user_id: Uuid,
+    pub joined_at: DateTime<Utc>,
+}

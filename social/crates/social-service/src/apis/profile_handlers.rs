@@ -6,9 +6,8 @@ use crate::{
         user_stats::UserStats,
     },
     utils::{
-        api_errors::ApiError,
+        errors::{app_error::AppError, error_payload::ErrorPayload},
         time::{default_time_period, TimePeriod},
-        ErrorResponse,
     },
     AppState,
 };
@@ -23,26 +22,27 @@ use utoipa::ToSchema;
 
 use super::api_models::response::LeaderboardResponse;
 
-pub const TAG: &str = "profile";
+pub const TAG: &str = "profiles";
 
+/// Get profile details by username
 #[utoipa::path(
     get,
     tag = TAG,
     path = "/",
+    operation_id = "getProfile",
     responses(
-        (status = 200, description = "Profile details", body = ProfileDetailsResponse),
-        (status = 500, description = "Internal server error", body = ErrorResponse)
+        (status = 200, description = "Profile details retrieved successfully", body = ProfileDetailsResponse),
+        (status = 404, description = "User not found", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
-    params((
-        "username" = String,
-        Query,
-        description = "Username"
-    ))
+    params(
+        ("username" = String, Query, description = "Username")
+    )
 )]
 pub(super) async fn get_profile(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<ProfileQuery>,
-) -> Result<(StatusCode, Json<ProfileDetailsResponse>), ApiError> {
+) -> Result<(StatusCode, Json<ProfileDetailsResponse>), AppError> {
     let query = ProfileQuery {
         username: query.username.clone(),
         picked_after: TimePeriod::AllTime,
@@ -66,20 +66,22 @@ pub struct ProfilePicksAndStatsResponse {
     stats: UserStats,
 }
 
+/// Get user picks and stats
 #[utoipa::path(
     get,
     tag = TAG,
     path = "/user-picks-and-stats",
+    operation_id = "getUserPicksAndStats",
     responses(
-        (status = 200, description = "User picks and stats", body = ProfilePicksAndStatsResponse),
-        (status = 500, description = "Internal server error", body = ErrorResponse)
+        (status = 200, description = "User picks and stats retrieved successfully", body = ProfilePicksAndStatsResponse),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
     params(ProfilePicksAndStatsQuery)
 )]
 pub(super) async fn get_profile_picks_and_stats(
     State(app_state): State<Arc<AppState>>,
     Query(params): Query<ProfilePicksAndStatsQuery>,
-) -> Result<(StatusCode, Json<ProfilePicksAndStatsResponse>), ApiError> {
+) -> Result<(StatusCode, Json<ProfilePicksAndStatsResponse>), AppError> {
     let (picks, stats) = app_state
         .profile_service
         .get_user_picks_and_stats(&params)
@@ -91,22 +93,25 @@ pub(super) async fn get_profile_picks_and_stats(
     ))
 }
 
+/// Get leaderboard
 #[utoipa::path(
     get,
     tag = TAG,
     path = "/leaderboard",
+    operation_id = "getLeaderboard",
     responses(
-        (status = 200, description = "Leaderboard", body = LeaderboardResponse),
-        (status = 500, description = "Internal server error", body = ErrorResponse)
+        (status = 200, description = "Leaderboard retrieved successfully", body = LeaderboardResponse),
+        (status = 400, description = "Invalid request parameters", body = ErrorPayload),
+        (status = 500, description = "Internal server error", body = ErrorPayload)
     ),
     params(ProfileLeaderboardQuery)
 )]
 pub(super) async fn leaderboard(
     State(app_state): State<Arc<AppState>>,
     Query(params): Query<ProfileLeaderboardQuery>,
-) -> Result<(StatusCode, Json<LeaderboardResponse>), ApiError> {
+) -> Result<(StatusCode, Json<LeaderboardResponse>), AppError> {
     if params.username.is_none() && params.following {
-        return Err(ApiError::BadRequest(
+        return Err(AppError::BadRequest(
             "Cannot use following without username".to_string(),
         ));
     }

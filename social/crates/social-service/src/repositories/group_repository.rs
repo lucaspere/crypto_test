@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
-    apis::group_handlers::ListGroupsQuery,
+    apis::api_models::query::ListGroupsQuery,
     models::groups::{CreateOrUpdateGroup, Group, GroupSettings, GroupUser, GroupWithUsers},
     repositories::token_repository::QUALIFIED_TOKEN_PICKS_FILTER,
 };

@@ -5,19 +5,19 @@ use chrono::{DateTime, FixedOffset, Utc};
 use token_pick::TokenPickHandler;
 use tracing::{debug, error, instrument};
 
-use crate::utils::api_errors::ApiError;
+use crate::utils::errors::app_error::AppError;
 
 use super::types::TokenPickEventData;
 
 #[async_trait]
 pub trait EventHandler: Send + Sync {
-    async fn handle(&self, payload: &str) -> Result<(), ApiError>;
+    async fn handle(&self, payload: &str) -> Result<(), AppError>;
 }
 
 #[async_trait]
 impl EventHandler for TokenPickHandler {
     #[instrument(skip(self, payload))]
-    async fn handle(&self, payload: &str) -> Result<(), ApiError> {
+    async fn handle(&self, payload: &str) -> Result<(), AppError> {
         match serde_json::from_str::<TokenPickEventData>(payload) {
             Ok(data) => {
                 debug!(
@@ -29,7 +29,7 @@ impl EventHandler for TokenPickHandler {
             }
             Err(e) => {
                 error!("Failed to parse token pick payload: {}", e);
-                Err(ApiError::InternalError(e.to_string()))
+                Err(AppError::InternalServerError())
             }
         }
     }

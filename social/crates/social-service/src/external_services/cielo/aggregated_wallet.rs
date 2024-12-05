@@ -1,5 +1,5 @@
 use super::CieloService;
-use crate::{models::tokens::Chain, utils::api_errors::ApiError};
+use crate::{models::tokens::Chain, utils::errors::app_error::AppError};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +34,7 @@ impl CieloService {
         &self,
         wallet_address: &str,
         query: Option<AggregatedWalletStatsQuery>,
-    ) -> Result<AggregatedWalletStats, ApiError> {
+    ) -> Result<AggregatedWalletStats, AppError> {
         let cache_key = format!("wallet_stats:{}", wallet_address);
         if let Some(cached_response) = self
             .redis_service
