@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use axum::middleware;
 use axum::Router;
+use middlewares::security::verify_api_key;
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use utoipa_scalar::{Scalar, Servable};
@@ -9,6 +11,7 @@ use crate::AppState;
 
 pub mod api_models;
 pub mod group_handlers;
+pub mod middlewares;
 pub mod profile_handlers;
 pub mod token_handlers;
 pub mod user_handlers;
@@ -16,10 +19,37 @@ pub mod user_handlers;
 #[derive(OpenApi)]
 #[openapi(
     tags(
-        (name = "users", description = "User management API")
+        (name = "users", description = "User management API"),
+        (name = "tokens", description = "Token management API"),
+        (name = "groups", description = "Group management API"),
+        (name = "profiles", description = "Profile management API")
+    ),
+    modifiers(&SecurityAddon),
+    components(
+        schemas()
+    ),
+    security(
+        ("api_key" = [])
     )
 )]
 pub struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "api_key",
+                utoipa::openapi::security::SecurityScheme::ApiKey(
+                    utoipa::openapi::security::ApiKey::Header(
+                        utoipa::openapi::security::ApiKeyValue::new("X-API-Key"),
+                    ),
+                ),
+            );
+        }
+    }
+}
 
 pub fn setup_routes() -> Router<Arc<AppState>> {
     let api_doc = ApiDoc::openapi();
@@ -77,10 +107,7 @@ pub fn setup_routes() -> Router<Arc<AppState>> {
         .split_for_parts();
 
     Router::new()
-        .merge(Scalar::with_url("/docs", api_openapi))
         .merge(api_router)
+        .route_layer(middleware::from_fn(verify_api_key))
+        .merge(Scalar::with_url("/docs", api_openapi))
 }
-
-// fn setup_user_routes() {
-//     let router = Router::new().route("/{id}/follow/{follower_id}", user_handl);
-// }
