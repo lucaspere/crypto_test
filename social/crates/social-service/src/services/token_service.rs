@@ -466,8 +466,6 @@ impl TokenService {
             .await?
         {
             let existing_pick_response: TokenPickResponse = existing_pick.into();
-            dbg!(&existing_pick_response);
-            dbg!(&token_info);
             let price_diff = calculate_price_multiplier(
                 &existing_pick_response.price_at_call,
                 &token_info.price,
@@ -517,7 +515,7 @@ impl TokenService {
             )
             .await?;
 
-        info!("Successfully saved token pick with id {}", token_pick.id);
+        debug!("Successfully saved token pick with id {}", token_pick.id);
 
         let user_cache_key = format!("user_picks_stats:{}", user.username);
         let list_cache_pattern = format!("token_picks:{}:*", user.id);

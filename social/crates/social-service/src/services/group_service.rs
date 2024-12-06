@@ -121,7 +121,14 @@ impl GroupService {
                     .user_service
                     .get_by_telegram_user_id(*telegram_id)
                     .await?;
-                user.unwrap().id
+                if let Some(user) = user {
+                    user.id
+                } else {
+                    return Err(AppError::NotFound(format!(
+                        "User with telegram_id {} not found",
+                        telegram_id
+                    )));
+                }
             }
             (None, None) => {
                 return Err(AppError::BadRequest(
