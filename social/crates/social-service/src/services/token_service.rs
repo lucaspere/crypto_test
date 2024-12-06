@@ -615,11 +615,14 @@ impl TokenService {
     }
 
     pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPick>>, AppError> {
-        info!("Getting all tokens with picks");
+        debug!("Getting all tokens with picks");
         self.token_repository
             .get_all_tokens_with_picks_group_by_group_id()
             .await
-            .map_err(AppError::from)
+            .map_err(|e| {
+                error!("Failed to get all tokens with picks: {}", e);
+                AppError::InternalServerError()
+            })
     }
 
     pub async fn bulk_update_token_picks(

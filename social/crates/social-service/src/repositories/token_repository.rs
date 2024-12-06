@@ -569,12 +569,12 @@ impl TokenRepository {
     ) -> Result<HashMap<String, Vec<TokenPick>>, sqlx::Error> {
         let query = format!(
             r#"
-            SELECT tp.token_address as address,
+           SELECT t.address,
                    json_agg(
                        json_build_object(
                            'id', tp.id,
                            'group_id', tp.group_id,
-                           'token', COALESCE(row_to_json(t), json_build_object('address', tp.token_address)),
+                           'token', row_to_json(t),
                            'user', row_to_json(u),
                            'group', {GROUP_JSON_BUILDER},
                            'telegram_message_id', tp.telegram_message_id,
@@ -586,14 +586,14 @@ impl TokenRepository {
                            'highest_market_cap', tp.highest_market_cap,
                            'highest_multiplier', tp.highest_multiplier,
                            'hit_date', tp.hit_date
-                       ) ORDER BY tp.call_date DESC
+                       )
                    ) as picks
-            FROM social.token_picks tp
-            LEFT JOIN social.tokens t ON t.address = tp.token_address
+            FROM social.tokens t
+            JOIN social.token_picks tp ON t.address = tp.token_address
             JOIN public.user u ON tp.user_id = u.id
             JOIN social.groups g ON tp.group_id = g.id
-            GROUP BY tp.token_address
-            "#,
+            GROUP BY t.address
+        "#,
         );
 
         let groups = sqlx::query_as::<_, TokenPicksGroup>(&query)
