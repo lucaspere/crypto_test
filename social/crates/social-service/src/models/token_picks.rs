@@ -117,6 +117,8 @@ pub struct TokenPickResponse {
     pub highest_mult_post_call: f32,
     /// Date the pick hit
     pub hit_date: Option<DateTime<FixedOffset>>,
+    /// Price at the time the pick was made
+    pub price_at_call: Decimal,
 }
 
 impl From<TokenPick> for TokenPickResponse {
@@ -150,6 +152,7 @@ impl From<TokenPick> for TokenPickResponse {
             market_cap_at_call: pick.market_cap_at_call.round_dp(2),
             current_market_cap,
             current_multiplier,
+            price_at_call: pick.price_at_call,
             ..Default::default()
         }
     }

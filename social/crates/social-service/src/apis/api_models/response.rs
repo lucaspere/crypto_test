@@ -3,11 +3,14 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::models::{
-    groups::{Group, GroupSettings},
-    profiles::ProfileDetailsResponse,
-    token_picks::TokenPickResponse,
-    user_stats::UserStats,
+use crate::{
+    external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
+    models::{
+        groups::{Group, GroupSettings},
+        profiles::ProfileDetailsResponse,
+        token_picks::TokenPickResponse,
+        user_stats::UserStats,
+    },
 };
 
 #[derive(Serialize, ToSchema)]
@@ -90,4 +93,38 @@ pub struct GroupUserResponse {
     pub group_id: i64,
     pub user_id: Uuid,
     pub joined_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct SavedTokenPickResponse {
+    pub pick: TokenPickResponse,
+    pub has_update: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenPickDiff {
+    pub market_cap_diff: f32,
+    pub price_diff: f32,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenPickWithDiffResponse {
+    pub pick: TokenPickResponse,
+    pub pick_diff: Option<TokenPickDiff>,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum TokenPickResponseType {
+    Saved(TokenPickResponse),
+    AlreadyCalled(TokenPickWithDiffResponse),
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct TokenPickResponseWithMetadata {
+    #[serde(flatten)]
+    pub pick: TokenPickResponseType,
+    pub token_metadata: LatestTokenMetadataResponse,
 }

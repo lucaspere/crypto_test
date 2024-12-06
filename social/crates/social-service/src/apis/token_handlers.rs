@@ -14,7 +14,10 @@ use crate::{
     AppState,
 };
 
-use super::api_models::request::{DeleteTokenPickRequest, PaginatedTokenPickGroupResponse};
+use super::api_models::{
+    request::{DeleteTokenPickRequest, PaginatedTokenPickGroupResponse},
+    response::TokenPickResponseWithMetadata,
+};
 
 pub const TAG: &str = "token-picks";
 
@@ -71,7 +74,7 @@ pub(super) async fn list_token_picks(
 pub(super) async fn create_token_pick(
     State(app_state): State<Arc<AppState>>,
     Json(body): Json<TokenPickRequest>,
-) -> Result<(StatusCode, Json<TokenPickResponse>), AppError> {
+) -> Result<(StatusCode, Json<TokenPickResponseWithMetadata>), AppError> {
     let token_pick = app_state.token_service.save_token_pick(body).await?;
     Ok((StatusCode::OK, Json(token_pick)))
 }

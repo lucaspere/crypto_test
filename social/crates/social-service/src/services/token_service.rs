@@ -3,8 +3,9 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
 use tracing::{debug, error, info};
@@ -14,6 +15,10 @@ use crate::{
     apis::api_models::{
         query::{GroupLeaderboardQuery, TokenQuery},
         request::{AddUserRequest, CreateGroupRequest, DeleteTokenPickRequest, TokenGroupQuery},
+        response::{
+            TokenPickDiff, TokenPickResponseType, TokenPickResponseWithMetadata,
+            TokenPickWithDiffResponse,
+        },
     },
     external_services::{
         birdeye::BirdeyeService,
@@ -370,16 +375,14 @@ impl TokenService {
     pub async fn save_token_pick(
         &self,
         pick: TokenPickRequest,
-    ) -> Result<TokenPickResponse, AppError> {
-        info!(
+    ) -> Result<TokenPickResponseWithMetadata, AppError> {
+        debug!(
             "Saving token pick for user {} and token {}",
             pick.telegram_user_id, pick.address
         );
 
-        let telegram_user_id = pick.telegram_user_id.parse().map_err(|e| {
-            error!("Failed to parse telegram user id: {}", e);
-            AppError::BadRequest("Invalid telegram user id".to_string())
-        })?;
+        let telegram_user_id = pick.telegram_user_id.parse::<i64>().unwrap();
+
         let user = match self
             .user_service
             .get_by_telegram_user_id(telegram_user_id)
@@ -439,43 +442,74 @@ impl TokenService {
 
         let market_cap_at_call = token_info.market_cap;
 
-        let call_date = pick
-            .timestamp
-            .map(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
-            .unwrap_or_else(|| None);
-
         let token_pick = TokenPick {
             token: token_info.clone().into(),
-            call_date: call_date.unwrap_or(chrono::Utc::now()).into(),
+            call_date: pick.timestamp.into(),
             group,
             user: Some(Json(user.clone())),
-            telegram_message_id: Some(pick.telegram_message_id.parse().map_err(|e| {
-                error!("Failed to parse telegram message id: {}", e);
-                AppError::BadRequest("Invalid telegram message id".to_string())
-            })?),
+            telegram_message_id: pick.telegram_message_id.parse::<i64>().ok(),
             price_at_call: token_info.price,
             highest_market_cap: Some(market_cap_at_call),
             supply_at_call: Some(token_info.token_info.supply),
             market_cap_at_call,
-            telegram_id: Some(pick.telegram_user_id.parse().map_err(|e| {
-                error!("Failed to parse telegram user id: {}", e);
-                AppError::BadRequest("Invalid telegram user id".to_string())
-            })?),
+            telegram_id: Some(pick.telegram_user_id.parse::<i64>().unwrap_or_default()),
             ..Default::default()
         };
 
-        info!("Saving token pick: {:?}", token_pick);
-        let token_pick = self.token_repository.save_token_pick(token_pick).await?;
+        if let Some(existing_pick) = self
+            .token_repository
+            .check_if_token_already_called_in_timeframe(
+                &pick.address,
+                pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
+                pick.timestamp - Duration::hours(24),
+            )
+            .await?
+        {
+            let existing_pick_response: TokenPickResponse = existing_pick.into();
+            dbg!(&existing_pick_response);
+            dbg!(&token_info);
+            let price_diff = calculate_price_multiplier(
+                &existing_pick_response.price_at_call,
+                &token_info.price,
+            );
+            let market_cap_diff = calculate_price_multiplier(
+                &existing_pick_response.current_market_cap,
+                &token_info.market_cap,
+            );
+
+            let pick_response = TokenPickResponseType::AlreadyCalled(TokenPickWithDiffResponse {
+                pick: existing_pick_response,
+                pick_diff: Some(TokenPickDiff {
+                    market_cap_diff: market_cap_diff.round_dp(2).to_f32().unwrap_or_default(),
+                    price_diff: price_diff.round_dp(2).to_f32().unwrap_or_default(),
+                }),
+            });
+
+            return Ok(TokenPickResponseWithMetadata {
+                pick: pick_response,
+                token_metadata: token_info.clone(),
+            });
+        }
+
+        debug!("Saving token pick: {:?}", token_pick);
+        let token_pick = self
+            .token_repository
+            .save_token_pick(token_pick)
+            .await
+            .map_err(|e| {
+                error!("Failed to save token pick: {}", e);
+                AppError::InternalServerError()
+            })?;
 
         self.group_service
             .create_or_update_group(CreateGroupRequest {
-                group_id: pick.telegram_chat_id.parse().unwrap(),
+                group_id: pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
                 ..Default::default()
             })
             .await?;
         self.group_service
             .add_user_to_group(
-                pick.telegram_chat_id.parse().unwrap(),
+                pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
                 &AddUserRequest {
                     user_id: None,
                     telegram_id: Some(user.telegram_id),
@@ -495,7 +529,10 @@ impl TokenService {
 
         let pick_response: TokenPickResponse = token_pick.into();
 
-        Ok(pick_response)
+        Ok(TokenPickResponseWithMetadata {
+            pick: TokenPickResponseType::Saved(pick_response),
+            token_metadata: token_info.clone(),
+        })
     }
 
     pub async fn list_token_picks_group(
@@ -795,5 +832,20 @@ impl TokenService {
             .await?;
 
         Ok(())
+    }
+
+    async fn token_already_called(
+        &self,
+        address: &str,
+        group_id: i64,
+        call_date: DateTime<Utc>,
+    ) -> Result<Option<TokenPick>, AppError> {
+        let timeframe = call_date - Duration::hours(24);
+        let pick = self
+            .token_repository
+            .check_if_token_already_called_in_timeframe(address, group_id, timeframe)
+            .await?;
+
+        Ok(pick)
     }
 }

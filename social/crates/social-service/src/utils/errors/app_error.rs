@@ -45,6 +45,9 @@ pub enum AppError {
     /// An error to be returned when a business logic error occurs
     #[error("Business logic error: {0}")]
     BusinessLogicError(String),
+
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
 }
 
 impl AppError {
@@ -62,6 +65,7 @@ impl AppError {
             AppError::DownloadError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::TokenPickNotFound => StatusCode::NOT_FOUND,
             AppError::BusinessLogicError(_) => StatusCode::CONFLICT,
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
         }
     }
     fn error_type(&self) -> String {
@@ -78,6 +82,7 @@ impl AppError {
             AppError::DownloadError(_) => "DOWNLOAD_ERROR",
             AppError::TokenPickNotFound => "TOKEN_PICK_NOT_FOUND",
             AppError::BusinessLogicError(_) => "BUSINESS_LOGIC_ERROR",
+            AppError::Unauthorized(_) => "UNAUTHORIZED",
         }
         .to_string()
     }
