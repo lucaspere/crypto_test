@@ -40,16 +40,14 @@ CREATE TABLE IF NOT EXISTS social.token_picks (
     user_id uuid,
     group_id bigint,
     telegram_message_id bigint,
-    telegram_id bigint,
     price_at_call numeric(28,18) NOT NULL,
     market_cap_at_call numeric(36,18) DEFAULT 0,
     supply_at_call numeric(36,18) DEFAULT 0,
     highest_market_cap numeric(36,18) DEFAULT 0,
-    highest_multiplier numeric(10,2) DEFAULT 0,
     hit_date timestamp with time zone,
     call_date timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT token_picks_group_id_fkey FOREIGN KEY (group_id)
-        REFERENCES social.groups (id) ON DELETE CASCADE
+    highest_multiplier numeric(10,2) DEFAULT 0,
+    telegram_id bigint
 );
 
 -- Table: social.comments

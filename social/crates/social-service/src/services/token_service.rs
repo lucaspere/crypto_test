@@ -408,7 +408,14 @@ impl TokenService {
             }
         };
 
-        if self.has_user_reached_action_limit(&user.id).await? {
+        if self
+            .has_user_reached_action_limit(&user.id)
+            .await
+            .map_err(|e| {
+                error!("Failed to check if user has reached action limit: {}", e);
+                AppError::InternalServerError()
+            })?
+        {
             return Err(AppError::BusinessLogicError(
                 "User reached the maximum number of picks".to_string(),
             ));
@@ -437,7 +444,10 @@ impl TokenService {
         if let Ok(None) = self.token_repository.get_token(&pick.address, None).await {
             let token: Token = token_info.clone().into();
             tracing::debug!("Saving new token: {:?}", token);
-            self.token_repository.save_token(token).await?;
+            self.token_repository.save_token(token).await.map_err(|e| {
+                error!("Failed to save new token: {}", e);
+                AppError::InternalServerError()
+            })?;
         }
 
         let market_cap_at_call = token_info.market_cap;
