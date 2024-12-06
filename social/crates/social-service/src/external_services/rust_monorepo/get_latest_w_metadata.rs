@@ -1,7 +1,8 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LatestTokenMetadataResponse {
     pub address: String,
@@ -13,7 +14,7 @@ pub struct LatestTokenMetadataResponse {
     pub token_info: TokenInfoProperty,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BirdEyeMetadataDataProperty {
     pub name: String,
@@ -21,7 +22,6 @@ pub struct BirdEyeMetadataDataProperty {
     pub decimals: usize,
     #[serde(rename = "logoURI")]
     pub logo_uri: Option<String>,
-    extensions: Option<BirdEyeMetadataExtensionsProperty>,
     pub liquidity: Option<Decimal>,
     last_trade_unix_time: Option<i64>,
     last_trade_human_time: Option<String>,
@@ -72,7 +72,7 @@ struct BirdEyeMetadataExtensionsProperty {
     description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenInfoProperty {
     pub supply: Decimal,

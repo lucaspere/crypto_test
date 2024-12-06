@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Utc};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -91,9 +91,15 @@ impl TokenRepository {
 
     pub async fn save_token(&self, token: Token) -> Result<Token, sqlx::Error> {
         let query = r#"
-            INSERT INTO social.tokens (address, name, symbol, chain, volume_24h, liquidity, logo_uri)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (address, chain) DO UPDATE SET name = $2, symbol = $3, volume_24h = $5, liquidity = $6, logo_uri = $7
+            INSERT INTO social.tokens (address, name, symbol, chain, volume_24h, liquidity, market_cap, logo_uri)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (address, chain) DO UPDATE SET
+                name = $2,
+                symbol = $3,
+                volume_24h = $5,
+                liquidity = $6,
+                market_cap = $7,
+                logo_uri = $8
 			RETURNING *
         "#;
 
@@ -562,12 +568,12 @@ impl TokenRepository {
     ) -> Result<HashMap<String, Vec<TokenPick>>, sqlx::Error> {
         let query = format!(
             r#"
-            SELECT t.address,
+            SELECT tp.token_address as address,
                    json_agg(
                        json_build_object(
                            'id', tp.id,
                            'group_id', tp.group_id,
-                           'token', row_to_json(t),
+                           'token', COALESCE(row_to_json(t), json_build_object('address', tp.token_address)),
                            'user', row_to_json(u),
                            'group', {GROUP_JSON_BUILDER},
                            'telegram_message_id', tp.telegram_message_id,
@@ -579,14 +585,14 @@ impl TokenRepository {
                            'highest_market_cap', tp.highest_market_cap,
                            'highest_multiplier', tp.highest_multiplier,
                            'hit_date', tp.hit_date
-                       )
+                       ) ORDER BY tp.call_date DESC
                    ) as picks
-            FROM social.tokens t
-            JOIN social.token_picks tp ON t.address = tp.token_address
+            FROM social.token_picks tp
+            LEFT JOIN social.tokens t ON t.address = tp.token_address
             JOIN public.user u ON tp.user_id = u.id
             JOIN social.groups g ON tp.group_id = g.id
-            GROUP BY t.address
-        "#,
+            GROUP BY tp.token_address
+            "#,
         );
 
         let groups = sqlx::query_as::<_, TokenPicksGroup>(&query)
@@ -729,6 +735,34 @@ impl TokenRepository {
             .execute(self.db.as_ref())
             .await?;
         Ok(())
+    }
+
+    pub async fn check_if_token_already_called_in_timeframe(
+        &self,
+        address: &str,
+        group_id: i64,
+        call_date: DateTime<Utc>,
+    ) -> Result<Option<TokenPick>, sqlx::Error> {
+        sqlx::query_as::<_, TokenPick>(
+            r#"
+			 SELECT tp.*,
+                   row_to_json(t) AS token,
+                   row_to_json(u) AS user,
+                   row_to_json(g) AS group
+            FROM social.token_picks tp
+            JOIN social.tokens t ON tp.token_address = t.address
+            JOIN public.user u ON tp.user_id = u.id
+            JOIN social.groups g ON tp.group_id = g.id
+            WHERE tp.token_address = $1
+            AND tp.group_id = $2
+            AND tp.call_date >= $3
+			"#,
+        )
+        .bind(address)
+        .bind(group_id)
+        .bind(call_date)
+        .fetch_optional(self.db.as_ref())
+        .await
     }
 }
 

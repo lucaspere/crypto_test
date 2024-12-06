@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -97,7 +98,9 @@ pub struct TokenPickRequest {
     pub telegram_message_id: String,
     pub telegram_user_id: String,
     pub telegram_chat_id: String,
+    pub telegram_username: Option<String>,
     pub user_bullpen_id: Option<Uuid>,
-    pub timestamp: Option<i64>,
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub timestamp: DateTime<Utc>,
     pub address: String,
 }

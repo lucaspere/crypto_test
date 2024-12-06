@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use get_latest_w_metadata::LatestTokenMetadataResponse;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use reqwest::Client;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::utils::errors::app_error::AppError;
 
@@ -27,8 +27,10 @@ impl RustMonorepoService {
         &self,
         addresses: &[String],
     ) -> Result<HashMap<String, LatestTokenMetadataResponse>, AppError> {
-        let body =
-            serde_json::to_string(&addresses).map_err(|e| AppError::InternalServerError())?;
+        let body = serde_json::to_string(&addresses).map_err(|e| {
+            warn!("Failed to serialize addresses: {}", e);
+            AppError::InternalServerError()
+        })?;
         debug!("Sending data to rust monorepo: {}", body.len());
         let url = format!("{}/price/latest-with-metadata", self.rust_monorepo_url);
         let res = self
