@@ -108,7 +108,7 @@ pub fn init_tracing(settings: &settings::Settings) {
         .with_file(true)
         .with_line_number(true)
         .with_thread_names(true)
-        .with_ansi(env != "prod")
+        .with_ansi(env != "prod" && env != "staging")
         .init();
 }
 
