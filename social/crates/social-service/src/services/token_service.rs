@@ -324,7 +324,7 @@ impl TokenService {
         pick_row: &mut TokenPick,
         metadata: &LatestTokenMetadataResponse,
     ) -> Result<(TokenPickResponse, bool), AppError> {
-        info!(
+        debug!(
             "Processing single pick with metadata for token pick {}",
             pick_row.id
         );
@@ -614,10 +614,13 @@ impl TokenService {
         Ok(count >= Self::MAX_PICK_LIMIT)
     }
 
-    pub async fn get_all_tokens(&self) -> Result<HashMap<String, Vec<TokenPick>>, AppError> {
+    pub async fn get_all_tokens(
+        &self,
+        since: DateTime<Utc>,
+    ) -> Result<HashMap<String, Vec<TokenPick>>, AppError> {
         debug!("Getting all tokens with picks");
         self.token_repository
-            .get_all_tokens_with_picks_group_by_group_id()
+            .get_all_tokens_with_picks_group_by_group_id(since)
             .await
             .map_err(|e| {
                 error!("Failed to get all tokens with picks: {}", e);

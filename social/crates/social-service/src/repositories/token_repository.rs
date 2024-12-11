@@ -566,6 +566,7 @@ impl TokenRepository {
 
     pub async fn get_all_tokens_with_picks_group_by_group_id(
         &self,
+        since: DateTime<Utc>,
     ) -> Result<HashMap<String, Vec<TokenPick>>, sqlx::Error> {
         let query = format!(
             r#"
@@ -592,11 +593,13 @@ impl TokenRepository {
             JOIN social.token_picks tp ON t.address = tp.token_address
             JOIN public.user u ON tp.user_id = u.id
             JOIN social.groups g ON tp.group_id = g.id
+            WHERE tp.call_date >= $1
             GROUP BY t.address
         "#,
         );
 
         let groups = sqlx::query_as::<_, TokenPicksGroup>(&query)
+            .bind(since)
             .fetch_all(self.db.as_ref())
             .await?;
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use dotenv::dotenv;
 use social_service::{jobs, settings, start_event_listeners};
 use tokio::net::TcpListener;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let (app, container) = social_service::setup_router(&settings).await?;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
-    debug!("Server running on http://{:?}", listener.local_addr());
+    info!("Server running on http://{:?}", listener.local_addr());
     let settings = Arc::new(settings);
 
     if settings.environment != Some("dev".to_string()) {

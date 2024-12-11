@@ -35,7 +35,7 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
         })?;
 
     if !lock_acquired {
-        info!("Another instance is currently processing token picks");
+        debug!("Another instance is currently processing token picks");
         return Ok(());
     }
 
@@ -43,7 +43,12 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
     info!("Starting token picks processing");
 
     let result = async {
-        let tokens = app_state.token_service.get_all_tokens().await?;
+        let since = if app_state.environment == "staging" {
+            Utc::now() - chrono::Duration::days(1)
+        } else {
+            Utc::now() - chrono::Duration::days(30)
+        };
+        let tokens = app_state.token_service.get_all_tokens(since).await?;
 
         let addresses: Vec<_> = tokens.keys().cloned().collect();
         info!(token_count = addresses.len(), "Retrieved tokens to process");
