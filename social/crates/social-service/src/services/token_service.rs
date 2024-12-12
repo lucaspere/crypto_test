@@ -371,7 +371,6 @@ impl TokenService {
 
         Ok((pick_response, has_update))
     }
-
     pub async fn save_token_pick(
         &self,
         pick: TokenPickRequest,
@@ -424,10 +423,16 @@ impl TokenService {
         let group = match pick.telegram_chat_id.parse() {
             Ok(id) => match self.group_service.get_group(id).await {
                 Ok(group) => group.into(),
-                Err(_) => CreateOrUpdateGroup {
-                    id,
-                    ..Default::default()
-                },
+                Err(_) => {
+                    let group = self
+                        .group_service
+                        .create_or_update_group(CreateGroupRequest {
+                            group_id: pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
+                            ..Default::default()
+                        })
+                        .await?;
+                    group.into()
+                }
             },
             Err(_) => CreateOrUpdateGroup::default(),
         };
@@ -493,6 +498,20 @@ impl TokenService {
                 }),
             });
 
+            if let Err(e) = self
+                .group_service
+                .add_user_to_group(
+                    pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
+                    &AddUserRequest {
+                        user_id: None,
+                        telegram_id: Some(user.telegram_id),
+                    },
+                )
+                .await
+            {
+                error!("Failed to add user to group: {}", e);
+            }
+
             return Ok(TokenPickResponseWithMetadata {
                 pick: pick_response,
                 token_metadata: token_info.clone(),
@@ -508,22 +527,6 @@ impl TokenService {
                 error!("Failed to save token pick: {}", e);
                 AppError::InternalServerError()
             })?;
-
-        self.group_service
-            .create_or_update_group(CreateGroupRequest {
-                group_id: pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
-                ..Default::default()
-            })
-            .await?;
-        self.group_service
-            .add_user_to_group(
-                pick.telegram_chat_id.parse::<i64>().unwrap_or_default(),
-                &AddUserRequest {
-                    user_id: None,
-                    telegram_id: Some(user.telegram_id),
-                },
-            )
-            .await?;
 
         debug!("Successfully saved token pick with id {}", token_pick.id);
 
