@@ -818,7 +818,10 @@ impl TokenService {
         );
         let leaderboard_key =
             RedisKeys::get_group_leaderboard_key(group_id, &query.timeframe.to_string());
+        let hash_key =
+            RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe.to_string());
         self.redis_service.delete_cached(&leaderboard_key).await?;
+        self.redis_service.delete_cached(&hash_key).await?;
         debug!(
             "Successfully updated group leaderboard cache for group {} with timeframe {}",
             group_id, query.timeframe
