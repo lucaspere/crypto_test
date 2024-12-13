@@ -194,9 +194,17 @@ async fn process_token_picks(
 
     let results = futures::future::join_all(pick_futures).await;
 
-    let cache_futures = results.iter().filter(|r| r.is_ok()).map(|r| {
+    let cache_futures = results.iter().filter_map(|r| {
         let pick = r.as_ref().unwrap().0.clone();
-        update_pick_stats(app_state, pick)
+        if TokenPick::is_qualified(
+            pick.market_cap_at_call,
+            pick.token.liquidity,
+            pick.token.volume_24h,
+        ) {
+            Some(update_pick_stats(app_state, pick))
+        } else {
+            None
+        }
     });
 
     futures::future::join_all(cache_futures).await;
