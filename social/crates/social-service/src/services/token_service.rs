@@ -8,6 +8,7 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIter
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::{prelude::One, Decimal};
 use sqlx::types::Json;
+use tokio::task;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -714,62 +715,81 @@ impl TokenService {
         let hash_key =
             RedisKeys::get_group_leaderboard_data_key(group_id, &query.timeframe.to_string());
 
-        if let Ok(pick_ids) = self
-            .redis_service
-            .zrange_by_score(&zset_key, 0, query.limit as isize)
-            .await
-        {
-            if !pick_ids.is_empty() {
-                if let Ok(Some(cached_data)) = self
-                    .redis_service
-                    .hget_multiple::<TokenPickResponse>(&hash_key, &pick_ids)
-                    .await
-                {
-                    return Ok(cached_data);
-                }
-            }
-        }
+        // if let Ok(pick_ids) = self
+        //     .redis_service
+        //     .zrange_by_score(&zset_key, 0, query.limit as isize)
+        //     .await
+        // {
+        //     if !pick_ids.is_empty() {
+        //         if let Ok(Some(cached_data)) = self
+        //             .redis_service
+        //             .hget_multiple::<TokenPickResponse>(&hash_key, &pick_ids)
+        //             .await
+        //         {
+        //             return Ok(cached_data);
+        //         }
+        //     }
+        // }
 
         let mut picks = self
             .token_repository
             .get_group_leaderboard(group_id, &query.timeframe, query.limit)
             .await?;
-        info!("Fetched {} picks", picks.len());
+        let mut responses: Vec<TokenPickResponse> = Vec::new();
         if picks.is_empty() {
-            return Ok(Vec::new());
+            return Ok(responses);
         }
 
-        info!("Fetching metadata for {} picks", picks.len());
-        let addresses: Vec<String> = picks
-            .iter()
-            .map(|pick| pick.token.address.clone())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
+        if !query.force_refresh {
+            responses = picks.into_iter().map(TokenPickResponse::from).collect();
+        } else {
+            info!("Fetching metadata for {} picks", picks.len());
+            let addresses: Vec<String> = picks
+                .iter()
+                .map(|pick| pick.token.address.clone())
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
 
-        let metadata = self
-            .rust_monorepo_service
-            .get_latest_w_metadata(&addresses)
-            .await?;
+            let metadata = self
+                .rust_monorepo_service
+                .get_latest_w_metadata(&addresses)
+                .await?;
 
-        info!(
-            "Processing {:?} picks",
-            picks.iter().map(|p| p.id).collect::<Vec<_>>()
-        );
-        let responses: Vec<TokenPickResponse> = picks
-            .par_iter_mut()
-            .filter_map(|pick| {
-                metadata
-                    .get(&pick.token.address)
-                    .and_then(|token_metadata| {
-                        futures::executor::block_on(
-                            self.process_single_pick_with_metadata(pick, token_metadata),
-                        )
-                        .ok()
-                        .map(|(response, _)| response)
-                    })
-            })
-            .collect();
+            info!(
+                "Processing {:?} picks",
+                picks.iter().map(|p| p.id).collect::<Vec<_>>()
+            );
+            let results = picks
+                .par_iter_mut()
+                .filter_map(|pick| {
+                    metadata
+                        .get(&pick.token.address)
+                        .and_then(|token_metadata| {
+                            futures::executor::block_on(
+                                self.process_single_pick_with_metadata(pick, token_metadata),
+                            )
+                            .ok()
+                        })
+                })
+                .collect::<Vec<_>>();
+
+            let token_repository = self.token_repository.clone();
+            let token_picks_to_update = results
+                .iter()
+                .filter(|(_, need_update)| *need_update)
+                .map(|(response, _)| response.clone())
+                .collect::<Vec<_>>();
+            task::spawn(async move {
+                if let Err(e) = token_repository
+                    .bulk_update_token_picks(&token_picks_to_update)
+                    .await
+                {
+                    error!("Failed to update token picks: {}", e);
+                }
+            });
+            responses = results.into_iter().map(|(response, _)| response).collect();
+        }
 
         if !responses.is_empty() {
             let query_clone = query.clone();
