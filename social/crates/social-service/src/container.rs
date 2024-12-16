@@ -42,8 +42,10 @@ impl ServiceContainer {
         let user_repository = Arc::new(UserRepository::new(db.clone()));
         let token_repository = Arc::new(TokenRepository::new(db.clone()));
         let redis_service = Arc::new(RedisService::new(&settings.redis_url).await?);
-        let rust_monorepo_service =
-            Arc::new(RustMonorepoService::new(settings.rust_monorepo_url.clone()));
+        let rust_monorepo_service = Arc::new(RustMonorepoService::new(
+            settings.rust_monorepo_url.clone(),
+            settings.rust_monorepo_api_key.clone(),
+        ));
         let usergate_service = Arc::new(UserGateService::new(
             settings.usergate_url.clone(),
             settings.usergate_api_key.clone(),

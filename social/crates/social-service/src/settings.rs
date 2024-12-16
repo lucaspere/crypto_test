@@ -8,6 +8,7 @@ pub struct Settings {
     pub redis_url: String,
     pub port: Option<u16>,
     pub rust_monorepo_url: String,
+    pub rust_monorepo_api_key: String,
     pub birdeye_api_key: String,
     pub cielo_api_key: String,
     pub telegram_bot_token: String,
@@ -25,7 +26,8 @@ pub struct Settings {
 pub fn load_settings() -> Result<Settings, config::ConfigError> {
     let builder = Config::builder()
         .set_default("s3_bucket", "bullpen-social-service")?
-        .set_default("aws_region", "us-east-1")?;
+        .set_default("aws_region", "us-east-1")?
+        .set_default("rust_monorepo_api_key", "")?;
     let settings = builder.add_source(Environment::default());
     settings.build()?.try_deserialize()
 }
