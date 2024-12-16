@@ -12,14 +12,16 @@ pub mod get_latest_w_metadata;
 pub struct RustMonorepoService {
     client: Client,
     rust_monorepo_url: String,
+    api_key: String,
 }
 
 impl RustMonorepoService {
-    pub fn new(rust_monorepo_url: String) -> Self {
+    pub fn new(rust_monorepo_url: String, api_key: String) -> Self {
         let client = Client::new();
         Self {
             client,
             rust_monorepo_url,
+            api_key,
         }
     }
 
@@ -37,6 +39,7 @@ impl RustMonorepoService {
             .client
             .post(&url)
             .header("Content-Type", "application/json")
+            .header("X-API-Key", self.api_key.clone())
             .body(body)
             .send()
             .await?;
