@@ -119,11 +119,11 @@ pub(super) async fn list_group_token_picks(
 #[utoipa::path(
     delete,
     tag = TAG,
-    path = "/picks/{id}",
+    path = "/picks",
     operation_id = "deleteTokenPick",
     request_body = DeleteTokenPickRequest,
     responses(
-        (status = 200, description = "Token pick deleted successfully"),
+        (status = 200, description = "Token pick deleted successfully", body = TokenPickResponse),
         (status = 400, description = "Invalid request data", body = ErrorPayload),
         (status = 404, description = "Token pick not found", body = ErrorPayload),
         (status = 409, description = "Cannot delete pick after time limit", body = ErrorPayload),
