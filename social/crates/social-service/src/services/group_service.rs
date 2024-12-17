@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{
@@ -92,7 +93,10 @@ impl GroupService {
                 &payload.settings.unwrap_or_default(),
             )
             .await
-            .map_err(AppError::DatabaseError)
+            .map_err(|e| {
+                error!("Error creating or updating group: {}", e);
+                AppError::DatabaseError(e)
+            })
     }
 
     pub async fn get_group(&self, id: i64) -> Result<Group, AppError> {
