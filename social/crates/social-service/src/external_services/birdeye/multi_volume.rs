@@ -13,7 +13,7 @@ pub const BIRDEYE_OHLCV_URL: &str = "https://public-api.birdeye.so/defi/price_vo
 #[derive(Serialize, Debug)]
 pub struct BirdeyeMultiVolumeBody {
     #[serde(rename = "type")]
-    pub timeframe: String,
+    pub timeframe: Option<String>,
     pub list_address: String,
 }
 
@@ -44,7 +44,7 @@ impl BirdeyeService {
         body: BirdeyeMultiVolumeBody,
     ) -> Result<BirdeyeMultiVolumeResponse, AppError> {
         debug!(
-            "Fetching multi volume for addresses: {:?}, chain: {}, timeframe: {}",
+            "Fetching multi volume for addresses: {:?}, chain: {}, timeframe: {:?}",
             body.list_address, chain, body.timeframe
         );
         let response = self
@@ -70,24 +70,5 @@ impl BirdeyeService {
             })?;
 
         Ok(multi_volume_response)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get_multi_volume_request() {
-        let birdeye_service = BirdeyeMultiVolumeBody {
-            timeframe: "24h".to_string(),
-            list_address: vec![
-                "eL5fUxj2J4CiQsmW85k5FG9DvuQjjUoBHoQBi2Kpump".to_string(),
-                "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263".to_string(),
-            ]
-            .join(","),
-        };
-        let response = serde_json::to_string(&birdeye_service).unwrap();
-        println!(" Response {:#?}", response);
     }
 }
