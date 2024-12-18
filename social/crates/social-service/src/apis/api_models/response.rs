@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -11,6 +12,7 @@ use crate::{
         token_picks::TokenPickResponse,
         user_stats::UserStats,
     },
+    utils::time::TimePeriod,
 };
 
 #[derive(Serialize, ToSchema)]
@@ -127,4 +129,13 @@ pub struct TokenPickResponseWithMetadata {
     #[serde(flatten)]
     pub pick: TokenPickResponseType,
     pub token_metadata: LatestTokenMetadataResponse,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct TokenValueDataResponse {
+    pub price: Decimal,
+    pub volume: Decimal,
+    pub liquidity: Decimal,
+    pub time_period: TimePeriod,
+    pub price_human_time: String,
 }

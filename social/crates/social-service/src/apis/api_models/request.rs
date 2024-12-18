@@ -4,7 +4,10 @@ use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::models::{groups::GroupSettings, token_picks::TokenPickResponse};
+use crate::{
+    models::{groups::GroupSettings, token_picks::TokenPickResponse},
+    utils::time::TimePeriod,
+};
 
 use super::query::PickLeaderboardSort;
 
@@ -68,4 +71,10 @@ pub struct TokenGroupQuery {
 pub struct RemoveUserRequest {
     pub user_id: Uuid,
     pub group_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TokenValueDataRequest {
+    pub address: Vec<String>,
+    pub time_period: Option<TimePeriod>,
 }

@@ -1,9 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time,
 };
 
 use chrono::{DateTime, Duration, Utc};
+
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::{prelude::One, Decimal};
@@ -15,20 +17,26 @@ use uuid::Uuid;
 use crate::{
     apis::api_models::{
         query::{GroupLeaderboardQuery, TokenQuery},
-        request::{AddUserRequest, CreateGroupRequest, DeleteTokenPickRequest, TokenGroupQuery},
+        request::{
+            AddUserRequest, CreateGroupRequest, DeleteTokenPickRequest, TokenGroupQuery,
+            TokenValueDataRequest,
+        },
         response::{
             TokenPickDiff, TokenPickResponseType, TokenPickResponseWithMetadata,
-            TokenPickWithDiffResponse,
+            TokenPickWithDiffResponse, TokenValueDataResponse,
         },
     },
     external_services::{
-        birdeye::BirdeyeService,
+        birdeye::{
+            multi_price::BirdeyeMultiPriceQuery, multi_volume::BirdeyeMultiVolumeBody,
+            BirdeyeService,
+        },
         rust_monorepo::{get_latest_w_metadata::LatestTokenMetadataResponse, RustMonorepoService},
     },
     models::{
         groups::CreateOrUpdateGroup,
         token_picks::{TokenPick, TokenPickResponse},
-        tokens::{Token, TokenPickRequest},
+        tokens::{Chain, Token, TokenPickRequest},
     },
     repositories::token_repository::{ListTokenPicksParams, TokenRepository, UserPickLimitScope},
     services::user_service::UserService,
@@ -701,6 +709,7 @@ impl TokenService {
                 current_market_cap,
             );
             pick_row.highest_market_cap = Some(current_market_cap);
+
             return true;
         }
         false
@@ -887,5 +896,78 @@ impl TokenService {
             .await?;
 
         Ok(pick)
+    }
+    pub async fn get_token_value_data(
+        &self,
+        payload: TokenValueDataRequest,
+    ) -> Result<HashMap<String, TokenValueDataResponse>, AppError> {
+        let addresses: Vec<_> = payload
+            .address
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        let chunks: Vec<_> = addresses.chunks(50).collect();
+
+        let mut resp: HashMap<String, TokenValueDataResponse> =
+            HashMap::with_capacity(addresses.len());
+
+        for chunk in chunks {
+            let list_address = chunk.join(",");
+            let chain = Chain::Solana.to_string();
+
+            let (price_response, volume_response) = tokio::join!(
+                self.birdeye_service.get_multi_price_request(
+                    &chain,
+                    BirdeyeMultiPriceQuery {
+                        list_address: list_address.clone(),
+                        check_liquidity: None,
+                        include_liquidity: true,
+                    },
+                ),
+                self.birdeye_service.get_multi_volume_request(
+                    &chain,
+                    BirdeyeMultiVolumeBody {
+                        list_address,
+                        timeframe: None,
+                    },
+                )
+            );
+
+            if let Some(price_data) = price_response.unwrap_or_default().data {
+                for (address, price_item) in price_data {
+                    if let Some(price) = price_item {
+                        resp.insert(
+                            address,
+                            TokenValueDataResponse {
+                                price: price.price,
+                                liquidity: price.liquidity.unwrap_or_default(),
+                                price_human_time: price.update_human_time,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                }
+            }
+
+            if let Some(volume_data) = volume_response.unwrap_or_default().data {
+                for (address, volume_item) in volume_data {
+                    if let Some(volume) = volume_item {
+                        resp.entry(address)
+                            .and_modify(|data| {
+                                data.volume = volume.volume_usd;
+                            })
+                            .or_insert(TokenValueDataResponse {
+                                volume: volume.volume_usd,
+                                ..Default::default()
+                            });
+                    }
+                }
+            }
+
+            tokio::time::sleep(time::Duration::from_millis(500)).await;
+        }
+
+        Ok(resp)
     }
 }
