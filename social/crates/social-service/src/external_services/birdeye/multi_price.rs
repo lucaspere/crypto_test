@@ -28,7 +28,8 @@ pub type BirdeyeMultiPriceItems = HashMap<String, Option<BirdeyeMultiPriceItem>>
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct BirdeyeMultiPriceItem {
-    pub value: Decimal,
+    #[serde(rename = "value")]
+    pub price: Decimal,
     pub update_unix_time: i64,
     pub update_human_time: String,
     pub price_change_24h: Option<Decimal>,
@@ -60,7 +61,10 @@ impl BirdeyeService {
 
         let multi_price_response: BirdeyeMultiPriceResponse =
             response.json().await.map_err(|e| {
-                error!("Error text multi price: {} with query: {:?}", e, query);
+                error!(
+                    "Error deserializing multi price: {} with query: {:?}",
+                    e, query
+                );
                 AppError::InternalServerError()
             })?;
 
