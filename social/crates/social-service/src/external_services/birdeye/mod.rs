@@ -1,3 +1,4 @@
+pub mod multi_price;
 pub mod ohlcv;
 
 use reqwest::Client;
