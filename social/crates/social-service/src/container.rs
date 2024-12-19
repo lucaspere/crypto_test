@@ -31,6 +31,7 @@ pub struct ServiceContainer {
     pub rust_monorepo_service: Arc<RustMonorepoService>,
     pub token_data_service: Option<Arc<TokenDataService>>,
     pub s3_service: Arc<S3Service>,
+    pub birdeye_service: Arc<BirdeyeService>,
     pub environment: String,
 }
 
@@ -50,6 +51,7 @@ impl ServiceContainer {
             settings.usergate_url.clone(),
             settings.usergate_api_key.clone(),
         ));
+        let birdeye_service = Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone()));
         let s3_service = Arc::new(
             S3Service::new(
                 settings.s3_bucket.clone(),
@@ -91,7 +93,7 @@ impl ServiceContainer {
             rust_monorepo_service.clone(),
             user_service.clone(),
             redis_service.clone(),
-            Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone())),
+            birdeye_service.clone(),
             group_service.clone(),
         ));
 
@@ -99,7 +101,7 @@ impl ServiceContainer {
             user_repository,
             token_repository,
             rust_monorepo_service.clone(),
-            Arc::new(BirdeyeService::new(settings.birdeye_api_key.clone())),
+            birdeye_service.clone(),
             redis_service.clone(),
             token_service.clone(),
             Arc::new(CieloService::new(
@@ -129,6 +131,7 @@ impl ServiceContainer {
             rust_monorepo_service,
             token_data_service,
             s3_service,
+            birdeye_service,
             environment: settings.environment.clone().unwrap_or("prod".to_string()),
         })
     }

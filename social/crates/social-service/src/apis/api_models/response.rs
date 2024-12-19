@@ -131,11 +131,13 @@ pub struct TokenPickResponseWithMetadata {
     pub token_metadata: LatestTokenMetadataResponse,
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, Clone)]
 pub struct TokenValueDataResponse {
     pub price: Decimal,
     pub volume: Decimal,
     pub liquidity: Decimal,
+    pub market_cap: Decimal,
+    pub supply: Decimal,
     pub time_period: TimePeriod,
     pub price_human_time: String,
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::utils::serde_utils::deserialize_null_as_zero;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
@@ -10,7 +11,7 @@ use super::BirdeyeService;
 
 pub const BIRDEYE_OHLCV_URL: &str = "https://public-api.birdeye.so/defi/price_volume/multi";
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 pub struct BirdeyeMultiVolumeBody {
     #[serde(rename = "type")]
     pub timeframe: Option<String>,
@@ -31,10 +32,10 @@ pub struct BirdeyeMultiVolumeItem {
     pub price: Decimal,
     pub update_unix_time: i64,
     pub update_human_time: String,
-    #[serde(rename = "volumeUSD")]
+    #[serde(rename = "volumeUSD", deserialize_with = "deserialize_null_as_zero")]
     pub volume_usd: Decimal,
-    pub volume_change_percent: Decimal,
-    pub price_change_percent: Decimal,
+    pub volume_change_percent: Option<Decimal>,
+    pub price_change_percent: Option<Decimal>,
 }
 
 impl BirdeyeService {
@@ -60,11 +61,15 @@ impl BirdeyeService {
                 AppError::InternalServerError()
             })?;
 
-        let multi_volume_response: BirdeyeMultiVolumeResponse =
-            response.json().await.map_err(|e| {
+        let response = response.text().await.map_err(|e| {
+            error!("Error fetching multi volume: {}", e);
+            AppError::InternalServerError()
+        })?;
+        let multi_volume_response: BirdeyeMultiVolumeResponse = serde_json::from_str(&response)
+            .map_err(|_| {
                 error!(
-                    "Error deserializing multi volume: {} with body: {:?}",
-                    e, body
+                    "Error deserializing multi volume with response: {}",
+                    response
                 );
                 AppError::InternalServerError()
             })?;

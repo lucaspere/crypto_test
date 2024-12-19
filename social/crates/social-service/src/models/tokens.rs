@@ -5,7 +5,10 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse;
+use crate::{
+    apis::api_models::response::TokenValueDataResponse,
+    external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
+};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[repr(u8)]
@@ -89,6 +92,17 @@ impl From<LatestTokenMetadataResponse> for Token {
             token_info.metadata.liquidity,
             token_info.token_info.image_url,
         )
+    }
+}
+
+impl From<TokenValueDataResponse> for Token {
+    fn from(token_value_data: TokenValueDataResponse) -> Self {
+        Self {
+            volume_24h: Some(token_value_data.volume),
+            liquidity: Some(token_value_data.liquidity),
+            market_cap: Some(token_value_data.market_cap),
+            ..Default::default()
+        }
     }
 }
 
