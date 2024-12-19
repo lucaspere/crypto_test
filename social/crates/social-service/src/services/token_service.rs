@@ -316,7 +316,12 @@ impl TokenService {
             let hit_date = pick.hit_date.take().map(|d| d);
             if let Err(e) = self
                 .token_repository
-                .update_highest_market_cap(pick.id, pick.highest_market_cap.unwrap(), hit_date)
+                .update_highest_market_cap(
+                    pick.id,
+                    pick.highest_market_cap.unwrap(),
+                    hit_date,
+                    Some(latest_price.token_info.supply),
+                )
                 .await
             {
                 error!(
@@ -350,7 +355,7 @@ impl TokenService {
 
         if pick_row.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
             has_update = self
-                .initialize_highest_market_cap(pick_row, metadata)
+                .initialize_highest_market_cap(pick_row, metadata.token_info.supply)
                 .await?;
         }
 
@@ -380,6 +385,57 @@ impl TokenService {
 
         Ok((pick_response, has_update))
     }
+
+    pub async fn process_single_pick_v2(
+        &self,
+        pick_row: &mut TokenPick,
+        price: Decimal,
+        supply: Decimal,
+        liquidity: Decimal,
+        volume_24h: Decimal,
+    ) -> Result<(TokenPickResponse, bool), AppError> {
+        debug!(
+            "Processing single pick with metadata for token pick {}",
+            pick_row.id
+        );
+        let current_market_cap = price * supply;
+        if !TokenPick::is_qualified(current_market_cap, Some(liquidity), Some(volume_24h)) {
+            return Ok((TokenPickResponse::from(pick_row.clone()), false));
+        }
+
+        let mut has_update = false;
+
+        if pick_row.highest_market_cap.unwrap_or_default() == Decimal::ZERO {
+            has_update = self.initialize_highest_market_cap(pick_row, supply).await?;
+        }
+
+        has_update |= self.update_highest_market_cap(pick_row, current_market_cap);
+
+        pick_row.highest_multiplier = Some(
+            calculate_price_multiplier(
+                &pick_row.market_cap_at_call,
+                &pick_row.highest_market_cap.unwrap_or_default(),
+            )
+            .round_dp(2),
+        );
+
+        if pick_row.highest_multiplier.unwrap_or_default() > Decimal::from(2) {
+            pick_row.hit_date = Some(Utc::now().into());
+            has_update = true;
+        }
+
+        let mut pick_response = TokenPickResponse::from(pick_row.clone());
+        pick_response.current_market_cap = current_market_cap.round_dp(2);
+        pick_response.current_multiplier =
+            calculate_price_multiplier(&pick_row.market_cap_at_call, &current_market_cap)
+                .round_dp(2)
+                .to_string()
+                .parse::<f32>()
+                .unwrap_or_default();
+
+        Ok((pick_response, has_update))
+    }
+
     pub async fn save_token_pick(
         &self,
         pick: TokenPickRequest,
@@ -656,13 +712,13 @@ impl TokenService {
     async fn initialize_highest_market_cap(
         &self,
         pick_row: &mut TokenPick,
-        metadata: &LatestTokenMetadataResponse,
+        supply: Decimal,
     ) -> Result<bool, AppError> {
         let ohlcv = self
             .birdeye_service
             .get_ohlcv_request(
                 "solana",
-                &metadata.address,
+                &pick_row.token.address,
                 pick_row.call_date.timestamp(),
                 Utc::now().timestamp(),
                 "1H",
@@ -676,9 +732,7 @@ impl TokenService {
                 AppError::InternalServerError()
             })?;
 
-        let supply = pick_row
-            .supply_at_call
-            .unwrap_or_else(|| metadata.token_info.supply);
+        let supply = pick_row.supply_at_call.unwrap_or(supply);
         let highest_market_cap = ohlcv.high * supply;
         pick_row.highest_market_cap = if highest_market_cap < Decimal::one() {
             Some(pick_row.market_cap_at_call)
@@ -901,18 +955,77 @@ impl TokenService {
         &self,
         payload: TokenValueDataRequest,
     ) -> Result<HashMap<String, TokenValueDataResponse>, AppError> {
-        let addresses: Vec<_> = payload
+        let addresses: Vec<String> = payload
             .address
             .into_iter()
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
-        let chunks: Vec<_> = addresses.chunks(50).collect();
+        let mut resp = HashMap::with_capacity(addresses.len());
 
-        let mut resp: HashMap<String, TokenValueDataResponse> =
-            HashMap::with_capacity(addresses.len());
+        for address in &addresses {
+            let supply = if let Some(supply) = self
+                .redis_service
+                .get_cached(&format!("token_supply:{}", address))
+                .await?
+            {
+                supply
+            } else if let Some(token_pick) = self
+                .token_repository
+                .get_token_pick_by_address(address)
+                .await?
+            {
+                let supply = match token_pick.supply_at_call {
+                    Some(supply) => supply,
+                    None => {
+                        let metadata = self
+                            .rust_monorepo_service
+                            .get_latest_w_metadata(&[address.clone()])
+                            .await?;
+                        let supply = metadata
+                            .get(address)
+                            .map_or(Decimal::from(0), |m| m.token_info.supply);
 
-        for chunk in chunks {
+                        self.token_repository
+                            .update_highest_market_cap(
+                                token_pick.id,
+                                token_pick.highest_market_cap.unwrap_or_default(),
+                                token_pick.hit_date,
+                                Some(supply),
+                            )
+                            .await?;
+
+                        supply
+                    }
+                };
+
+                if let Err(e) = self
+                    .redis_service
+                    .set_cached(
+                        &format!("token_supply:{}", address),
+                        &supply,
+                        60 * 60 * 24 * 30,
+                    )
+                    .await
+                {
+                    error!("Failed to set token supply cache: {}", e);
+                }
+
+                supply
+            } else {
+                Decimal::from(0)
+            };
+
+            resp.insert(
+                address.clone(),
+                TokenValueDataResponse {
+                    supply,
+                    ..Default::default()
+                },
+            );
+        }
+
+        for chunk in addresses.chunks(50) {
             let list_address = chunk.join(",");
             let chain = Chain::Solana.to_string();
 
@@ -937,15 +1050,12 @@ impl TokenService {
             if let Some(price_data) = price_response.unwrap_or_default().data {
                 for (address, price_item) in price_data {
                     if let Some(price) = price_item {
-                        resp.insert(
-                            address,
-                            TokenValueDataResponse {
-                                price: price.price,
-                                liquidity: price.liquidity.unwrap_or_default(),
-                                price_human_time: price.update_human_time,
-                                ..Default::default()
-                            },
-                        );
+                        resp.entry(address).and_modify(|data| {
+                            data.price = price.price;
+                            data.liquidity = price.liquidity.unwrap_or_default();
+                            data.price_human_time = price.update_human_time;
+                            data.market_cap = price.price * data.supply;
+                        });
                     }
                 }
             }
@@ -954,9 +1064,7 @@ impl TokenService {
                 for (address, volume_item) in volume_data {
                     if let Some(volume) = volume_item {
                         resp.entry(address)
-                            .and_modify(|data| {
-                                data.volume = volume.volume_usd;
-                            })
+                            .and_modify(|data| data.volume = volume.volume_usd)
                             .or_insert(TokenValueDataResponse {
                                 volume: volume.volume_usd,
                                 ..Default::default()

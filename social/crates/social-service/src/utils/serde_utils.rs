@@ -1,3 +1,5 @@
+
+use rust_decimal::Decimal;
 use serde::{de, Deserialize, Deserializer};
 use uuid::Uuid;
 
@@ -14,4 +16,12 @@ where
         }
     })
     .transpose()?)
+}
+
+pub fn deserialize_null_as_zero<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<Decimal> = Deserialize::deserialize(deserializer).expect("Fuck");
+    Ok(s.unwrap_or(Decimal::ZERO))
 }

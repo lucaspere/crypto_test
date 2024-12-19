@@ -4,13 +4,14 @@ use rayon::{
     iter::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSlice,
 };
+use rust_decimal::Decimal;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::sync::Semaphore;
 use tracing::{debug, info, instrument, warn, Span};
 
 use crate::{
+    apis::api_models::request::TokenValueDataRequest,
     container::ServiceContainer,
-    external_services::rust_monorepo::get_latest_w_metadata::LatestTokenMetadataResponse,
     models::{
         token_picks::{TokenPick, TokenPickResponse},
         tokens::Token,
@@ -19,7 +20,7 @@ use crate::{
 };
 
 const PROCESSING_LOCK_TTL: u64 = 180; // 3 minutes
-const BATCH_SIZE: i64 = 30;
+const BATCH_SIZE: i64 = 50;
 const DB_SLOW_THRESHOLD_SECS: f64 = 2.0;
 
 #[instrument(skip(app_state), fields(job_id = %uuid::Uuid::new_v4()))]
@@ -44,7 +45,7 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
 
     let result = async {
         let since = if app_state.environment == "staging" {
-            Utc::now() - chrono::Duration::days(1)
+            Utc::now() - chrono::Duration::days(2)
         } else {
             Utc::now() - chrono::Duration::days(30)
         };
@@ -135,8 +136,11 @@ async fn process_address_batch(
     let latest_token_info = {
         let api_start = Instant::now();
         let result = app_state
-            .rust_monorepo_service
-            .get_latest_w_metadata(&address_batch)
+            .token_service
+            .get_token_value_data(TokenValueDataRequest {
+                address: address_batch.to_vec(),
+                time_period: Some(TimePeriod::Day),
+            })
             .await?;
 
         let duration = api_start.elapsed().as_secs_f64();
@@ -156,8 +160,16 @@ async fn process_address_batch(
         .await?;
 
     let processing_futures = latest_token_info.into_iter().map(|(address, metadata)| {
-        let token = tokens.get(&address).unwrap();
-        process_token_picks(app_state, token, metadata)
+        let picks = tokens.get(&address).unwrap();
+        let supply = picks.iter().find_map(|pick| pick.supply_at_call).unwrap();
+        process_token_picks(
+            app_state,
+            picks,
+            metadata.price,
+            supply,
+            metadata.liquidity,
+            metadata.volume,
+        )
     });
 
     let results: Vec<_> = futures::future::join_all(processing_futures)
@@ -183,13 +195,16 @@ async fn process_address_batch(
 async fn process_token_picks(
     app_state: &Arc<ServiceContainer>,
     picks: &Vec<TokenPick>,
-    metadata: LatestTokenMetadataResponse,
+    price: Decimal,
+    supply: Decimal,
+    liquidity: Decimal,
+    volume_24h: Decimal,
 ) -> Result<Vec<TokenPickResponse>, AppError> {
     let mut picks = picks.clone();
     let pick_futures = picks.iter_mut().map(|pick| {
         app_state
             .token_service
-            .process_single_pick_with_metadata(pick, &metadata)
+            .process_single_pick_v2(pick, price, supply, liquidity, volume_24h)
     });
 
     let results = futures::future::join_all(pick_futures).await;

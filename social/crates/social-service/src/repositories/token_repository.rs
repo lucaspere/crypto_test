@@ -161,11 +161,11 @@ impl TokenRepository {
             ON CONFLICT (address, chain)
             DO UPDATE SET
                 name = CASE
-                    WHEN EXCLUDED.name != '' THEN EXCLUDED.name
+                    WHEN LENGTH(EXCLUDED.name) > 0 THEN EXCLUDED.name
                     ELSE social.tokens.name
                 END,
                 symbol = CASE
-                    WHEN EXCLUDED.symbol != '' THEN EXCLUDED.symbol
+                    WHEN LENGTH(EXCLUDED.symbol) > 0 THEN EXCLUDED.symbol
                     ELSE social.tokens.symbol
                 END,
                 market_cap = CASE
@@ -498,17 +498,20 @@ impl TokenRepository {
         pick_id: i64,
         new_highest_market_cap: Decimal,
         new_hit_date: Option<DateTime<FixedOffset>>,
+        supply: Option<Decimal>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
 			UPDATE social.token_picks
-			SET highest_market_cap = $1,
-				hit_date = $2
-			WHERE id = $3
+			SET highest_market_cap = CASE WHEN highest_market_cap < $1 THEN $1 ELSE highest_market_cap END,
+				hit_date = CASE WHEN highest_market_cap < $1 THEN $2 ELSE hit_date END,
+				supply_at_call = CASE WHEN $3 IS NULL THEN supply_at_call ELSE $3 END
+			WHERE id = $4
 			"#,
         )
         .bind(new_highest_market_cap)
         .bind(new_hit_date)
+        .bind(supply)
         .bind(pick_id)
         .execute(self.db.as_ref())
         .await?;
@@ -760,11 +763,25 @@ impl TokenRepository {
             WHERE tp.token_address = $1
             AND tp.group_id = $2
             AND tp.call_date >= $3
-			"#,
+			LIMIT 1"#,
         )
         .bind(address)
         .bind(group_id)
         .bind(call_date)
+        .fetch_optional(self.db.as_ref())
+        .await
+    }
+
+    pub async fn get_token_pick_by_address(
+        &self,
+        address: &str,
+    ) -> Result<Option<TokenPickRow>, sqlx::Error> {
+        sqlx::query_as::<_, TokenPickRow>(
+            r#"SELECT * FROM social.token_picks
+				WHERE token_address = $1
+				LIMIT 1"#,
+        )
+        .bind(address)
         .fetch_optional(self.db.as_ref())
         .await
     }
