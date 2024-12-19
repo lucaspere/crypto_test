@@ -98,6 +98,8 @@ impl From<LatestTokenMetadataResponse> for Token {
 impl From<TokenValueDataResponse> for Token {
     fn from(token_value_data: TokenValueDataResponse) -> Self {
         Self {
+            address: token_value_data.address,
+            chain: token_value_data.chain,
             volume_24h: Some(token_value_data.volume),
             liquidity: Some(token_value_data.liquidity),
             market_cap: Some(token_value_data.market_cap),

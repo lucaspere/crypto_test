@@ -119,17 +119,14 @@ impl TokenRepository {
     }
 
     pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), sqlx::Error> {
+        let tokens: Vec<_> = tokens
+            .into_par_iter()
+            .filter(|token| !token.address.trim().is_empty() && !token.chain.trim().is_empty())
+            .collect();
+
         if tokens.is_empty() {
             return Ok(());
         }
-        let tokens: Vec<_> = tokens
-            .into_par_iter()
-            .filter(|token| {
-                !token.address.trim().is_empty()
-                    && !token.name.trim().is_empty()
-                    && !token.symbol.trim().is_empty()
-            })
-            .collect();
 
         const COLUMNS: &str =
             "(address, name, symbol, chain, market_cap, volume_24h, liquidity, logo_uri)";
@@ -180,7 +177,10 @@ impl TokenRepository {
                     WHEN EXCLUDED.liquidity IS NOT NULL THEN EXCLUDED.liquidity
                     ELSE social.tokens.liquidity
                 END,
-                logo_uri = EXCLUDED.logo_uri
+                logo_uri = CASE
+                    WHEN LENGTH(EXCLUDED.logo_uri) > 0 THEN EXCLUDED.logo_uri
+                    ELSE social.tokens.logo_uri
+                END
             "#,
             values = value_indices.join(",")
         );

@@ -87,7 +87,7 @@ impl RedisService {
             .arg(ttl_seconds)
             .query_async(&mut connection)
             .await?;
-        dbg!(&result);
+
         Ok(result.is_some())
     }
 
