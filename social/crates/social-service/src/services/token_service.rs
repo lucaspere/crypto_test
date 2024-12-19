@@ -705,7 +705,13 @@ impl TokenService {
     }
 
     pub async fn save_many_tokens(&self, tokens: Vec<Token>) -> Result<(), AppError> {
-        self.token_repository.save_many_tokens(tokens).await?;
+        self.token_repository
+            .save_many_tokens(tokens)
+            .await
+            .map_err(|e| {
+                error!("Failed to save tokens: {}", e);
+                AppError::InternalServerError()
+            })?;
         Ok(())
     }
 
@@ -1019,6 +1025,8 @@ impl TokenService {
             resp.insert(
                 address.clone(),
                 TokenValueDataResponse {
+                    address: address.clone(),
+                    chain: Chain::Solana.to_string(),
                     supply,
                     ..Default::default()
                 },

@@ -133,6 +133,8 @@ pub struct TokenPickResponseWithMetadata {
 
 #[derive(Debug, Serialize, Default, Clone)]
 pub struct TokenValueDataResponse {
+    pub address: String,
+    pub chain: String,
     pub price: Decimal,
     pub volume: Decimal,
     pub liquidity: Decimal,

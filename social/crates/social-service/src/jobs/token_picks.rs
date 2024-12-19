@@ -111,15 +111,12 @@ pub async fn process_token_picks_job(app_state: &Arc<ServiceContainer>) -> Resul
         "Finished processing token picks"
     );
 
-    // Release the lock early on error
-    if result.is_err() {
-        if let Err(e) = app_state
-            .redis_service
-            .delete_cached(&processing_lock_key)
-            .await
-        {
-            debug!(error = ?e, "Failed to release processing lock after error");
-        }
+    if let Err(e) = app_state
+        .redis_service
+        .delete_cached(&processing_lock_key)
+        .await
+    {
+        debug!(error = ?e, "Failed to release processing lock after error");
     }
 
     result
@@ -157,7 +154,11 @@ async fn process_address_batch(
     app_state
         .token_service
         .save_many_tokens(tokens_to_save)
-        .await?;
+        .await
+        .map_err(|e| {
+            warn!("Failed to save tokens in token picks job: {}", e);
+            AppError::InternalServerError()
+        })?;
 
     let processing_futures = latest_token_info.into_iter().map(|(address, metadata)| {
         let picks = tokens.get(&address).unwrap();
